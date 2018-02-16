@@ -25,6 +25,7 @@ module.exports = class huobipro extends Exchange {
                 'fetchOrders': true,
                 'fetchOpenOrders': true,
                 'withdraw': true,
+                'fetchDepositAddress':true,
             },
             'timeframes': {
                 '1m': '1min',
@@ -71,6 +72,7 @@ module.exports = class huobipro extends Exchange {
                         'order/orders', // 查询当前委托、历史委托
                         'order/matchresults', // 查询当前成交、历史成交
                         'dw/withdraw-virtual/addresses', // 查询虚拟币提现地址
+                        'dw/deposit-virtual/addresses',
                     ],
                     'post': [
                         'order/orders/place', // 创建并执行一个新订单 (一步下单， 推荐使用)
@@ -441,6 +443,25 @@ module.exports = class huobipro extends Exchange {
 
     async cancelOrder (id, symbol = undefined, params = {}) {
         return await this.privatePostOrderOrdersIdSubmitcancel ({ 'id': id });
+    }
+
+    async fetchDepositAddress (code, params = {}) {
+        await this.loadMarkets ();
+        let currency = this.currency (code);
+        let request = {
+            'currency': currency.id.toLowerCase(),
+        };
+        let response = await this.privateGetDwDepositVirtualAddresses (this.extend (request, params));
+        if(response['status'] === 'ok'){
+            let address = this.safeString (response, 'data');
+            return {
+                'currency': code,
+                'address': address,
+                'status': 'ok',
+                'info': response,
+            };
+        }
+        throw new ExchangeError (this.id + ' fetchDepositAddress failed: ' + this.last_http_response);
     }
 
     async withdraw (currency, amount, address, tag = undefined, params = {}) {
