@@ -16,7 +16,7 @@ module.exports = class gemini extends Exchange {
             'rateLimit': 1500, // 200 for private API
             'version': 'v1',
             'has': {
-                'fetchDepositAddress': false,
+                'fetchDepositAddress': true,
                 'CORS': false,
                 'fetchBidsAsks': false,
                 'fetchTickers': false,
@@ -181,6 +181,24 @@ module.exports = class gemini extends Exchange {
             'symbol': market['id'],
         }, params));
         return this.parseTrades (response, market, since, limit);
+    }
+
+    async fetchDepositAddress (code, params = {}) {
+        await this.loadMarkets ();
+        let currency = this.currency (code);
+        let response = await this.privatePostDepositCurrencyNewAddress (this.extend ({
+            'currency': currency['id'],
+        }, params));
+        if(response['address']){
+            let address = this.safeString (response, 'address');
+            return {
+                'currency': code,
+                'address': address,
+                'status': 'ok',
+                'info': response,
+            };
+        }
+        throw new ExchangeError (this.id + ' fetchDepositAddress failed: ' + this.last_http_response);
     }
 
     async fetchBalance (params = {}) {
