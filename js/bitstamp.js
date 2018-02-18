@@ -17,6 +17,7 @@ module.exports = class bitstamp extends Exchange {
             'version': 'v2',
             'has': {
                 'CORS': true,
+                'fetchDepositAddress': true,
                 'fetchOrder': true,
                 'fetchOpenOrders': true,
                 'fetchMyTrades': true,
@@ -302,6 +303,10 @@ module.exports = class bitstamp extends Exchange {
             feeCurrency = market['quote'];
             symbol = market['symbol'];
         }
+        let cost = undefined;
+        if (typeof price !== 'undefined')
+            if (typeof amount !== 'undefined')
+                cost = price * amount;
         return {
             'id': id,
             'info': trade,
@@ -313,6 +318,7 @@ module.exports = class bitstamp extends Exchange {
             'side': side,
             'price': price,
             'amount': amount,
+            'cost': cost,
             'fee': {
                 'cost': feeCost,
                 'currency': feeCurrency,
@@ -432,14 +438,22 @@ module.exports = class bitstamp extends Exchange {
             }
         }
         let amount = this.safeFloat (order, 'amount');
-        let filled = 0;
+        let filled = 0.0;
         let trades = [];
         let transactions = this.safeValue (order, 'transactions');
+        let feeCost = undefined;
+        let cost = undefined;
         if (typeof transactions !== 'undefined') {
             if (Array.isArray (transactions)) {
                 for (let i = 0; i < transactions.length; i++) {
                     let trade = this.parseTrade (this.extend ({ 'order_id': id }, transactions[i]), market);
                     filled += trade['amount'];
+                    if (typeof feeCost === 'undefined')
+                        feeCost = 0.0;
+                    feeCost += trade['fee']['cost'];
+                    if (typeof cost === 'undefined')
+                        cost = 0.0;
+                    cost += trade['cost'];
                     trades.push (trade);
                 }
             }
@@ -459,12 +473,24 @@ module.exports = class bitstamp extends Exchange {
         let side = this.safeString (order, 'type');
         if (typeof side !== 'undefined')
             side = (side === '1') ? 'sell' : 'buy';
-        let fee = undefined;
-        let cost = undefined;
         if (typeof market === 'undefined')
             market = this.getMarketFromTrades (trades);
-        if (typeof market !== 'undefined')
+        let feeCurrency = undefined;
+        if (typeof market !== 'undefined') {
             symbol = market['symbol'];
+            feeCurrency = market['quote'];
+        }
+        if (typeof cost === 'undefined') {
+            if (typeof price !== 'undefined')
+                cost = price * filled;
+        } else if (typeof price === 'undefined') {
+            if (filled > 0)
+                price = cost / filled;
+        }
+        let fee = {
+            'cost': feeCost,
+            'currency': feeCurrency,
+        };
         return {
             'id': id,
             'datetime': iso8601,
@@ -508,9 +534,27 @@ module.exports = class bitstamp extends Exchange {
         return false;
     }
 
+    async fetchDepositAddress (code, params = {}) {
+        if (this.isFiat (code))
+            throw new NotSupported (this.id + ' fiat fetchDepositAddress() for ' + code + ' is not implemented yet');
+        let name = this.getCurrencyName (code);
+        let v1 = (code === 'BTC');
+        let method = v1 ? 'v1' : 'private'; // v1 or v2
+        method += 'Post' + this.capitalize (name);
+        method += v1 ? 'Deposit' : '';
+        method += 'Address';
+        let response = await this[method] (params);
+        return {
+            'currency': code,
+            'status': 'ok',
+            'address': this.safeString (response, 'address'),
+            'tag': this.safeString (response, 'destination_tag'),
+            'info': response,
+        };
+    }
+
     async withdraw (code, amount, address, tag = undefined, params = {}) {
-        let isFiat = this.isFiat (code);
-        if (isFiat)
+        if (this.isFiat (code))
             throw new NotSupported (this.id + ' fiat withdraw() for ' + code + ' is not implemented yet');
         let name = this.getCurrencyName (code);
         let request = {

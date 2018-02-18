@@ -19,6 +19,7 @@ module.exports = class hitbtc2 extends hitbtc {
                 'createDepositAddress': true,
                 'fetchDepositAddress': true,
                 'CORS': true,
+                'editOrder': true,
                 'fetchCurrencies': true,
                 'fetchOHLCV': true,
                 'fetchTickers': true,
@@ -687,7 +688,7 @@ module.exports = class hitbtc2 extends hitbtc {
             parseFloat (ohlcv['max']),
             parseFloat (ohlcv['min']),
             parseFloat (ohlcv['close']),
-            parseFloat (ohlcv['volumeQuote']),
+            parseFloat (ohlcv['volume']),
         ];
     }
 
@@ -845,6 +846,27 @@ module.exports = class hitbtc2 extends hitbtc {
         let order = this.parseOrder (response);
         let id = order['id'];
         this.orders[id] = order;
+        return order;
+    }
+
+    async editOrder (id, symbol, type, side, amount = undefined, price = undefined, params = {}) {
+        await this.loadMarkets ();
+        // their max accepted length is 32 characters
+        let uuid = this.uuid ();
+        let parts = uuid.split ('-');
+        let requestClientId = parts.join ('');
+        requestClientId = requestClientId.slice (0, 32);
+        let request = {
+            'clientOrderId': id,
+            'requestClientId': requestClientId,
+        };
+        if (typeof amount !== 'undefined')
+            request['quantity'] = this.amountToPrecision (symbol, parseFloat (amount));
+        if (typeof price !== 'undefined')
+            request['price'] = this.priceToPrecision (symbol, price);
+        let response = await this.privatePatchOrderClientOrderId (this.extend (request, params));
+        let order = this.parseOrder (response);
+        this.orders[order['id']] = order;
         return order;
     }
 

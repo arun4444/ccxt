@@ -28,6 +28,7 @@ class poloniex (Exchange):
                 'createDepositAddress': True,
                 'fetchDepositAddress': True,
                 'CORS': False,
+                'editOrder': True,
                 'createMarketOrder': False,
                 'fetchOHLCV': True,
                 'fetchMyTrades': True,
@@ -169,7 +170,7 @@ class poloniex (Exchange):
             ohlcv['high'],
             ohlcv['low'],
             ohlcv['close'],
-            ohlcv['volume'],
+            ohlcv['quoteVolume'],
         ]
 
     def fetch_ohlcv(self, symbol, timeframe='5m', since=None, limit=None, params={}):
