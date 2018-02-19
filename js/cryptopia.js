@@ -15,6 +15,7 @@ module.exports = class cryptopia extends Exchange {
             'rateLimit': 1500,
             'countries': 'NZ', // New Zealand
             'has': {
+                'getCoinFees': true,
                 'CORS': false,
                 'createMarketOrder': false,
                 'fetchClosedOrders': 'emulated',
@@ -109,6 +110,35 @@ module.exports = class cryptopia extends Exchange {
         if (currency in currencies)
             return currencies[currency];
         return currency;
+    }
+
+    async getCoinFees (code, params = {}) {
+        let response = await this.publicGetGetCurrencies (params);
+        let currencies = response['Data'];
+        for (let i = 0; i < currencies.length; i++) {
+            let currency = currencies[i];
+            let id = currency['Symbol'];
+            if(id===code){
+                if(currency['WithdrawFee']){
+                    let withdrawEnabled = (currency['ListingStatus'] === 'Active');
+                    let status = currency['Status'].toLowerCase ();
+                    if (status !== 'ok')
+                        withdrawEnabled = false;
+                    const withdrawalFee = Number(currency['WithdrawFee']);
+                    const minimumWithdraw = Number(currency['MinWithdraw']);
+                    return {
+                        'symbol': code,
+                        'minimumWithdraw': Number(minimumWithdraw),
+                        'withdrawEnabled': withdrawEnabled,
+                        'withdrawalFee': Number(withdrawalFee),
+                        'depositFee': Number(0)
+                    }; 
+                } else {
+                    throw new ExchangeError (this.id + ' GetCoinFees failed: No Transaction fee in response');
+                }
+            }
+        }        
+        throw new ExchangeError (this.id + ' fetchCoinFees failed: ' + this.last_http_response + this.id);
     }
 
     async fetchMarkets () {

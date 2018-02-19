@@ -18,6 +18,7 @@ module.exports = class bittrex extends Exchange {
             'hasAlreadyAuthenticatedSuccessfully': false, // a workaround for APIKEY_INVALID
             // new metainfo interface
             'has': {
+                'getCoinFees': true,
                 'CORS': true,
                 'createMarketOrder': false,
                 'fetchDepositAddress': true,
@@ -64,6 +65,9 @@ module.exports = class bittrex extends Exchange {
                         'market/GetLatestTick',
                         'Markets/GetMarketSummaries',
                         'market/GetLatestTick',
+                    ],
+                    'post':[
+                        'Currency/GetCurrencyInfo',
                     ],
                 },
                 'public': {
@@ -145,6 +149,35 @@ module.exports = class bittrex extends Exchange {
 
     feeToPrecision (symbol, fee) {
         return this.truncate (parseFloat (fee), this.markets[symbol]['precision']['price']);
+    }
+
+    async getCoinFees (code, params = {}) {
+        const response = await this.v2PostCurrencyGetCurrencyInfo (this.extend ({
+            'currencyName': code,
+        }, params));
+        if (response.result.TxFee) {
+            const result = response.result;
+            const withdrawalFee = Number(this.safeString (result, 'TxFee'));
+            const minimumWithdraw = 3.00001*withdrawalFee;
+            const withdrawEnabledString = this.safeString (result, 'IsActive');
+            let withdrawEnabled;
+            if (withdrawEnabledString === 'true'){
+                withdrawEnabled = true;
+            }
+            if (withdrawEnabledString === 'false'){
+                withdrawEnabled = false;
+            }
+            return {
+                'symbol': code,
+                'minimumWithdraw': Number(minimumWithdraw),
+                'withdrawEnabled': withdrawEnabled,
+                'withdrawalFee': Number(withdrawalFee),
+                'depositFee': Number(0)
+            };
+        } else {
+            throw new ExchangeError (this.id + ' GetCoinFees failed: No Transaction fee in response');
+        }
+        throw new ExchangeError (this.id + ' fetchCoinFees failed: ' + this.last_http_response + this.id);
     }
 
     async fetchMarkets () {

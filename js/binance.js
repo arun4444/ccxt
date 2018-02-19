@@ -16,6 +16,7 @@ module.exports = class binance extends Exchange {
             'rateLimit': 500,
             // new metainfo interface
             'has': {
+                'getCoinFees': true,
                 'fetchDepositAddress': true,
                 'CORS': false,
                 'fetchBidsAsks': true,
@@ -49,6 +50,7 @@ module.exports = class binance extends Exchange {
                 'logo': 'https://user-images.githubusercontent.com/1294454/29604020-d5483cdc-87ee-11e7-94c7-d1a8d9169293.jpg',
                 'api': {
                     'web': 'https://www.binance.com',
+                    'hidden': 'https://www.binance.com',
                     'wapi': 'https://api.binance.com/wapi/v3',
                     'public': 'https://api.binance.com/api/v1',
                     'private': 'https://api.binance.com/api/v3',
@@ -66,6 +68,14 @@ module.exports = class binance extends Exchange {
                 'web': {
                     'get': [
                         'exchange/public/product',
+                    ],
+                    'post': [
+                        'assetWithdraw/getAsset.html',
+                    ],
+                },
+                'hidden': {
+                    'post': [
+                        'assetWithdraw/getAsset',
                     ],
                 },
                 'wapi': {
@@ -799,6 +809,34 @@ module.exports = class binance extends Exchange {
         throw new ExchangeError (this.id + ' fetchDepositAddress failed: ' + this.last_http_response);
     }
 
+    async getCoinFees (code, params = {}) {
+        let response = await this.hiddenPostAssetWithdrawGetAsset (this.extend ({
+            'asset': code,
+        }, params));
+        if ('transactionFee' in response) {
+            const minimumWithdraw = this.safeString (response, 'minProductWithdraw');
+            const withdrawEnabledString = this.safeString (response, 'enableWithdraw');
+            let withdrawEnabled;
+            if (withdrawEnabledString === 'true'){
+                withdrawEnabled = true;
+            }
+            if (withdrawEnabledString === 'false'){
+                withdrawEnabled = false;
+            }
+            let withdrawalFee = this.safeString (response, 'transactionFee');
+            return {
+                'symbol': code,
+                'minimumWithdraw': Number(minimumWithdraw),
+                'withdrawEnabled': withdrawEnabled,
+                'withdrawalFee': Number(withdrawalFee),
+                'depositFee': Number(0)
+            };
+        } else {
+            throw new ExchangeError (this.id + ' GetCoinFees failed: No Transaction fee in response');
+        }
+        throw new ExchangeError (this.id + ' GetCoinFees failed: ' + this.last_http_response + this.id);
+    }
+
     async withdraw (code, amount, address, tag = undefined, params = {}) {
         let currency = this.currency (code);
         let name = address.slice (0, 20);
@@ -822,6 +860,8 @@ module.exports = class binance extends Exchange {
         url += '/' + path;
         if (api === 'wapi')
             url += '.html';
+        if (api === 'hidden')
+            url += '.html';
         // v1 special case for userDataStream
         if (path === 'userDataStream') {
             body = this.urlencode (params);
@@ -829,7 +869,7 @@ module.exports = class binance extends Exchange {
                 'X-MBX-APIKEY': this.apiKey,
                 'Content-Type': 'application/x-www-form-urlencoded',
             };
-        } else if ((api === 'private') || (api === 'wapi')) {
+        } else if ((api === 'private') || (api === 'wapi') || (api === 'hidden')) {
             this.checkRequiredCredentials ();
             let query = this.urlencode (this.extend ({
                 'timestamp': this.milliseconds (),

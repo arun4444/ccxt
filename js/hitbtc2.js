@@ -16,6 +16,7 @@ module.exports = class hitbtc2 extends hitbtc {
             'rateLimit': 1500,
             'version': '2',
             'has': {
+                'getCoinFees': true,
                 'createDepositAddress': true,
                 'fetchDepositAddress': true,
                 'CORS': true,
@@ -599,6 +600,36 @@ module.exports = class hitbtc2 extends hitbtc {
             }));
         }
         return result;
+    }
+
+    async getCoinFees (code, params = {}) {
+        let currencies = await this.publicGetCurrency (params);
+        for (let i = 0; i < currencies.length; i++) {
+            let currency = currencies[i];
+            let id = currency['id'];
+            if(id===code){
+                if(currency['payoutFee']){
+                    let payin = this.safeValue (currency, 'payinEnabled');
+                    let payout = this.safeValue (currency, 'payoutEnabled');
+                    let transfer = this.safeValue (currency, 'transferEnabled');
+                    let delisted = this.safeValue (currency, 'delisted');
+                    let withdrawEnabled = payin && payout && transfer && !delisted;
+    
+                    const withdrawalFee = Number(currency['payoutFee']);
+                    const minimumWithdraw = withdrawalFee+0.00000001;
+                    return {
+                        'symbol': code,
+                        'minimumWithdraw': Number(minimumWithdraw),
+                        'withdrawEnabled': withdrawEnabled,
+                        'withdrawalFee': Number(withdrawalFee),
+                        'depositFee': Number(0)
+                    };  
+                } else {
+                    throw new ExchangeError (this.id + ' GetCoinFees failed: No Transaction fee in response');
+                }
+            }
+        }
+        throw new ExchangeError (this.id + ' fetchCoinFees failed: ' + this.last_http_response + this.id);
     }
 
     async fetchCurrencies (params = {}) {

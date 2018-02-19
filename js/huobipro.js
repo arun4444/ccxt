@@ -20,6 +20,7 @@ module.exports = class huobipro extends Exchange {
             'accountsById': undefined,
             'hostname': 'api.huobi.pro',
             'has': {
+                'getCoinFees': true,
                 'CORS': false,
                 'fetchOHCLV': true,
                 'fetchOrders': true,
@@ -60,6 +61,7 @@ module.exports = class huobipro extends Exchange {
                     'get': [
                         'common/symbols', // 查询系统支持的所有交易对
                         'common/currencys', // 查询系统支持的所有币种
+                        'settings/currencys',
                         'common/timestamp', // 查询系统当前时间
                     ],
                 },
@@ -73,6 +75,7 @@ module.exports = class huobipro extends Exchange {
                         'order/matchresults', // 查询当前成交、历史成交
                         'dw/withdraw-virtual/addresses', // 查询虚拟币提现地址
                         'dw/deposit-virtual/addresses',
+                        'dw/withdraw-virtual/fee',
                     ],
                     'post': [
                         'order/orders/place', // 创建并执行一个新订单 (一步下单， 推荐使用)
@@ -97,6 +100,44 @@ module.exports = class huobipro extends Exchange {
                 },
             },
         });
+    }
+
+    async getCoinFees (code, params = {}) {
+        let request = {
+            'currency': code.toLowerCase(),
+        };
+        let requestMap = {
+            'language': 'en-US',
+        };
+
+        let response = await this.privateGetDwWithdrawVirtualFee (this.extend (request, params));
+        let responseMap = await this.publicGetSettingsCurrencys (this.extend (requestMap, params));
+        let coinData;
+        if (responseMap.data){
+            for (let z = 0; z < responseMap.data.length; z++) {
+                const coin = responseMap.data[z];
+                if(code.toLowerCase() === coin.name){
+                    coinData = coin;
+                    break;
+                }              
+            }
+        }
+
+        if (coinData.name && response.data) {
+            const minimumWithdraw = this.safeString (coinData, 'withdraw-min-amount');
+            const withdrawEnabled = this.safeValue (coinData, 'withdraw-enabled');
+            let withdrawalFee = this.safeString (response, 'data');
+            return {
+                'symbol': code,
+                'minimumWithdraw': Number(minimumWithdraw),
+                'withdrawEnabled': withdrawEnabled,
+                'withdrawalFee': Number(withdrawalFee),
+                'depositFee': Number(0)
+            };
+        } else {
+            throw new ExchangeError (this.id + ' GetCoinFees failed: No Transaction fee in response');
+        }
+        throw new ExchangeError (this.id + ' GetCoinFees failed: ' + this.last_http_response + this.id);
     }
 
     async fetchMarkets () {

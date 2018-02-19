@@ -17,6 +17,7 @@ module.exports = class kucoin extends Exchange {
             'rateLimit': 2000,
             'userAgent': this.userAgents['chrome'],
             'has': {
+                'getCoinFees': true,
                 'CORS': false,
                 'cancelOrders': true,
                 'createMarketOrder': false,
@@ -168,6 +169,35 @@ module.exports = class kucoin extends Exchange {
                 },
             },
         });
+    }
+
+    async getCoinFees (code, params = {}) {
+        let response = await this.publicGetMarketOpenCoinInfo (this.extend ({
+            'coin': code,
+        }, params));
+        if (response.data && response.success && response.data.withdrawFeeRate) {
+            const data = response.data
+            const minimumWithdraw = this.safeString (data, 'withdrawMinAmount');
+            const withdrawEnabledString = this.safeString (data, 'enableWithdraw');
+            let withdrawEnabled;
+            if (withdrawEnabledString === 'true'){
+                withdrawEnabled = true;
+            }
+            if (withdrawEnabledString === 'false'){
+                withdrawEnabled = false;
+            }
+            let withdrawalFee = this.safeString (data, 'withdrawFeeRate');
+            return {
+                'symbol': code,
+                'minimumWithdraw': Number(minimumWithdraw),
+                'withdrawEnabled': withdrawEnabled,
+                'withdrawalFee': Number(withdrawalFee),
+                'depositFee': Number(0)
+            };
+        } else {
+            throw new ExchangeError (this.id + ' GetCoinFees failed: No Transaction fee in response');
+        }
+        throw new ExchangeError (this.id + ' GetCoinFees failed: ' + this.last_http_response + this.id);
     }
 
     async fetchMarkets () {
