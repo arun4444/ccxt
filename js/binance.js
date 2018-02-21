@@ -439,6 +439,7 @@ module.exports = class binance extends Exchange {
         let response = await this.privateGetAccount ({});
         let result = { 'info': response };
         let balances = response['balances'];
+        console.log(result)
         for (let i = 0; i < balances.length; i++) {
             let balance = balances[i];
             let currency = nativeToCanonCoin.get(balance['asset']);
