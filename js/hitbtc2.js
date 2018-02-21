@@ -690,7 +690,7 @@ module.exports = class hitbtc2 extends hitbtc {
         return result;
     }
 
-    async fetchBalance (params = {}) {
+    async fetchBalance (nativeToCanonCoin, params = {}) {
         await this.loadMarkets ();
         let type = this.safeString (params, 'type', 'trading');
         let method = 'privateGet' + this.capitalize (type) + 'Balance';
@@ -699,14 +699,16 @@ module.exports = class hitbtc2 extends hitbtc {
         for (let b = 0; b < balances.length; b++) {
             let balance = balances[b];
             let code = balance['currency'];
-            let currency = this.commonCurrencyCode (code);
-            let account = {
-                'free': parseFloat (balance['available']),
-                'used': parseFloat (balance['reserved']),
-                'total': 0.0,
-            };
-            account['total'] = this.sum (account['free'], account['used']);
-            result[currency] = account;
+            let currency = nativeToCanonCoin.get (code);
+            if(currency){
+                let account = {
+                    'free': parseFloat (balance['available']),
+                    'used': parseFloat (balance['reserved']),
+                    'total': 0.0,
+                };
+                account['total'] = this.sum (account['free'], account['used']);
+                result[currency] = account;
+            }            
         }
         return this.parseBalance (result);
     }

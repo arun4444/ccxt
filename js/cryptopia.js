@@ -417,7 +417,7 @@ module.exports = class cryptopia extends Exchange {
         return result;
     }
 
-    async fetchBalance (params = {}) {
+    async fetchBalance (nativeToCanonCoin, params = {}) {
         await this.loadMarkets ();
         let response = await this.privatePostGetBalance ();
         let balances = response['Data'];
@@ -425,14 +425,16 @@ module.exports = class cryptopia extends Exchange {
         for (let i = 0; i < balances.length; i++) {
             let balance = balances[i];
             let code = balance['Symbol'];
-            let currency = this.commonCurrencyCode (code);
-            let account = {
-                'free': balance['Available'],
-                'used': 0.0,
-                'total': balance['Total'],
-            };
-            account['used'] = account['total'] - account['free'];
-            result[currency] = account;
+            let currency = nativeToCanonCoin.get(code);
+            if(currency){
+                let account = {
+                    'free': balance['Available'],
+                    'used': 0.0,
+                    'total': balance['Total'],
+                };
+                account['used'] = account['total'] - account['free'];
+                result[currency] = account;
+            }            
         }
         return this.parseBalance (result);
     }

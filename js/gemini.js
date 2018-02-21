@@ -201,7 +201,7 @@ module.exports = class gemini extends Exchange {
         throw new ExchangeError (this.id + ' fetchDepositAddress failed: ' + this.last_http_response);
     }
 
-    async fetchBalance (params = {}) {
+    async fetchBalance (nativeToCanonCoin, params = {}) {
         await this.loadMarkets ();
         let balances = await this.privatePostBalances ();
         let result = { 'info': balances };

@@ -176,7 +176,7 @@ module.exports = class gdax extends Exchange {
         return result;
     }
 
-    async fetchBalance (params = {}) {
+    async fetchBalance (nativeToCanonCoin, params = {}) {
         await this.loadMarkets ();
         let balances = await this.privateGetAccounts ();
         let result = { 'info': balances };

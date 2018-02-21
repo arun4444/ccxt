@@ -308,7 +308,7 @@ module.exports = class kucoin extends Exchange {
         return result;
     }
 
-    async fetchBalance (params = {}) {
+    async fetchBalance (nativeToCanonCoin, params = {}) {
         await this.loadMarkets ();
         let response = await this.privateGetAccountBalance (this.extend ({
             'limit': 20, // default 12, max 20
@@ -320,18 +320,20 @@ module.exports = class kucoin extends Exchange {
         let keys = Object.keys (indexed);
         for (let i = 0; i < keys.length; i++) {
             let id = keys[i];
-            let currency = this.commonCurrencyCode (id);
-            let account = this.account ();
-            let balance = indexed[id];
-            let used = parseFloat (balance['freezeBalance']);
-            let free = parseFloat (balance['balance']);
-            let total = this.sum (free, used);
-            account['free'] = free;
-            account['used'] = used;
-            account['total'] = total;
-            result[currency] = account;
+            let currency = nativeToCanonCoin.get (id);
+            if(currency){
+                let account = this.account ();
+                let balance = indexed[id];
+                let used = parseFloat (balance['freezeBalance']);
+                let free = parseFloat (balance['balance']);
+                let total = this.sum (free, used);
+                account['free'] = free;
+                account['used'] = used;
+                account['total'] = total;
+                result[currency] = account;
+            }
         }
-        return this.parseBalance (result);
+        return (this.parseBalance (result));
     }
 
     async fetchOrderBook (symbol, limit = undefined, params = {}) {

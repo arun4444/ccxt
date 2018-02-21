@@ -114,7 +114,7 @@ module.exports = class bitflyer extends Exchange {
         return result;
     }
 
-    async fetchBalance (params = {}) {
+    async fetchBalance (nativeToCanonCoin, params = {}) {
         await this.loadMarkets ();
         let response = await this.privateGetGetbalance ();
         let balances = {};

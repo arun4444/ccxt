@@ -222,7 +222,7 @@ module.exports = class bittrex extends Exchange {
         return result;
     }
 
-    async fetchBalance (params = {}) {
+    async fetchBalance (nativeToCanonCoin, params = {}) {
         await this.loadMarkets ();
         let response = await this.accountGetBalances ();
         let balances = response['result'];
@@ -231,16 +231,18 @@ module.exports = class bittrex extends Exchange {
         let keys = Object.keys (indexed);
         for (let i = 0; i < keys.length; i++) {
             let id = keys[i];
-            let currency = this.commonCurrencyCode (id);
-            let account = this.account ();
-            let balance = indexed[id];
-            let free = parseFloat (balance['Available']);
-            let total = parseFloat (balance['Balance']);
-            let used = total - free;
-            account['free'] = free;
-            account['used'] = used;
-            account['total'] = total;
-            result[currency] = account;
+            let currency = nativeToCanonCoin.get(id);
+            if(currency){
+                let account = this.account ();
+                let balance = indexed[id];
+                let free = parseFloat (balance['Available']);
+                let total = parseFloat (balance['Balance']);
+                let used = total - free;
+                account['free'] = free;
+                account['used'] = used;
+                account['total'] = total;
+                result[currency] = account;
+            }
         }
         return this.parseBalance (result);
     }

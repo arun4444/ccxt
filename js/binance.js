@@ -434,25 +434,25 @@ module.exports = class binance extends Exchange {
         };
     }
 
-    async fetchBalance (params = {}) {
+    async fetchBalance (nativeToCanonCoin, params = {}) {
         await this.loadMarkets ();
-        let response = await this.privateGetAccount (params);
+        let response = await this.privateGetAccount ({});
         let result = { 'info': response };
         let balances = response['balances'];
         for (let i = 0; i < balances.length; i++) {
             let balance = balances[i];
-            let currency = balance['asset'];
-            if (currency in this.currencies_by_id)
-                currency = this.currencies_by_id[currency]['code'];
-            let account = {
-                'free': parseFloat (balance['free']),
-                'used': parseFloat (balance['locked']),
-                'total': 0.0,
-            };
-            account['total'] = this.sum (account['free'], account['used']);
-            result[currency] = account;
+            let currency = nativeToCanonCoin.get(balance['asset']);
+            if(currency){
+                let account = {
+                    'free': parseFloat (balance['free']),
+                    'used': parseFloat (balance['locked']),
+                    'total': 0.0,
+                };
+                account['total'] = this.sum (account['free'], account['used']);
+                result[currency] = account;
+            }
         }
-        return this.parseBalance (result);
+        this.parseBalance (result);
     }
 
     async fetchOrderBook (symbol, limit = undefined, params = {}) {
