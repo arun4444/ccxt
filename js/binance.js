@@ -450,11 +450,9 @@ module.exports = class binance extends Exchange {
                 };
                 account['total'] = this.sum (account['free'], account['used']);
                 result[currency] = account;
-            } else {
-                console.log("DAMN CANT FIND "+balance['asset'])
             }
         }
-        this.parseBalance (result);
+        return this.parseBalance (result);
     }
 
     async fetchOrderBook (symbol, limit = undefined, params = {}) {
