@@ -439,7 +439,6 @@ module.exports = class binance extends Exchange {
         let response = await this.privateGetAccount ({});
         let result = { 'info': response };
         let balances = response['balances'];
-        console.log(response)
         for (let i = 0; i < balances.length; i++) {
             let balance = balances[i];
             let currency = nativeToCanonCoin.get(balance['asset']);
@@ -451,6 +450,8 @@ module.exports = class binance extends Exchange {
                 };
                 account['total'] = this.sum (account['free'], account['used']);
                 result[currency] = account;
+            } else {
+                console.log("DAMN CANT FIND "+balance['asset'])
             }
         }
         this.parseBalance (result);
