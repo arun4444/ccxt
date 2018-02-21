@@ -119,7 +119,7 @@ module.exports = class cryptopia extends Exchange {
             let currency = currencies[i];
             let id = currency['Symbol'];
             if(id===code){
-                if(currency['WithdrawFee']){
+                if(typeof currency['WithdrawFee'] !== 'undefined'){
                     let withdrawEnabled = (currency['ListingStatus'] === 'Active');
                     let status = currency['Status'].toLowerCase ();
                     if (status !== 'ok')

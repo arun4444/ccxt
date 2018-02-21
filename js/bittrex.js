@@ -155,7 +155,7 @@ module.exports = class bittrex extends Exchange {
         const response = await this.v2PostCurrencyGetCurrencyInfo (this.extend ({
             'currencyName': code,
         }, params));
-        if (response.result.TxFee) {
+        if (typeof response.result.TxFee !== 'undefined') {
             const result = response.result;
             const withdrawalFee = Number(this.safeString (result, 'TxFee'));
             const minimumWithdraw = 3.00001*withdrawalFee;

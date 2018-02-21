@@ -175,7 +175,7 @@ module.exports = class kucoin extends Exchange {
         let response = await this.publicGetMarketOpenCoinInfo (this.extend ({
             'coin': code,
         }, params));
-        if (response.data && response.success && response.data.withdrawFeeRate) {
+        if (response.data && response.success && typeof response.data.withdrawFeeRate !== 'undefined') {
             const data = response.data
             const minimumWithdraw = this.safeString (data, 'withdrawMinAmount');
             const withdrawEnabledString = this.safeString (data, 'enableWithdraw');

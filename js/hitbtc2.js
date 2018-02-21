@@ -608,7 +608,7 @@ module.exports = class hitbtc2 extends hitbtc {
             let currency = currencies[i];
             let id = currency['id'];
             if(id===code){
-                if(currency['payoutFee']){
+                if(typeof currency['payoutFee'] !== 'undefined'){
                     let payin = this.safeValue (currency, 'payinEnabled');
                     let payout = this.safeValue (currency, 'payoutEnabled');
                     let transfer = this.safeValue (currency, 'transferEnabled');
