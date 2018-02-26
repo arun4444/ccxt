@@ -789,19 +789,21 @@ module.exports = class binance extends Exchange {
 
     async fetchDepositAddress (code, params = {}) {
         await this.loadMarkets ();
-        let currency = this.currency (code);
         let response = await this.wapiGetDepositAddress (this.extend ({
-            'asset': currency['id'],
+            'asset': code,
         }, params));
         if ('success' in response) {
             if (response['success']) {
-                let address = this.safeString (response, 'address');
-                let tag = this.safeString (response, 'addressTag');
+                let address = response.address;
+                let tag = response.addressTag;
+                if(tag.length < 1){
+                    tag = null
+                }
                 return {
                     'currency': code,
                     'address': address,
                     'tag': tag,
-                    'status': 'ok',
+                    'status': response.success,
                     'info': response,
                 };
             }
@@ -813,23 +815,18 @@ module.exports = class binance extends Exchange {
         let response = await this.hiddenPostAssetWithdrawGetAsset (this.extend ({
             'asset': code,
         }, params));
-        if ('transactionFee' in response) {
-            const minimumWithdraw = this.safeString (response, 'minProductWithdraw');
-            const withdrawEnabledString = this.safeString (response, 'enableWithdraw');
-            let withdrawEnabled;
-            if (withdrawEnabledString === 'true'){
-                withdrawEnabled = true;
-            }
-            if (withdrawEnabledString === 'false'){
-                withdrawEnabled = false;
-            }
-            let withdrawalFee = this.safeString (response, 'transactionFee');
+        if ('assetCode' in response) {
+            const minimumWithdraw = response['minProductWithdraw'];
+            const withdrawEnabled = response['enableWithdraw'];
+            const withdrawalFee = response['transactionFee'];
+            const depositEnabled = response["enableCharge"];
             return {
                 'symbol': code,
                 'minimumWithdraw': Number(minimumWithdraw),
                 'withdrawEnabled': withdrawEnabled,
                 'withdrawalFee': Number(withdrawalFee),
-                'depositFee': Number(0)
+                'depositEnabled':depositEnabled,
+                'depositFee': Number(0),
             };
         } else {
             throw new ExchangeError (this.id + ' GetCoinFees failed: No Transaction fee in response');

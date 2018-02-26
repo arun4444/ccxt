@@ -112,33 +112,30 @@ module.exports = class cryptopia extends Exchange {
         return currency;
     }
 
-    async getCoinFees (code, params = {}) {
-        let response = await this.publicGetGetCurrencies (params);
+    async getCoinFees(code, params = {}) {
+        let response = await this.publicGetGetCurrencies(params);
         let currencies = response['Data'];
         for (let i = 0; i < currencies.length; i++) {
             let currency = currencies[i];
             let id = currency['Symbol'];
-            if(id===code){
-                if(typeof currency['WithdrawFee'] !== 'undefined'){
-                    let withdrawEnabled = (currency['ListingStatus'] === 'Active');
-                    let status = currency['Status'].toLowerCase ();
-                    if (status !== 'ok')
-                        withdrawEnabled = false;
-                    const withdrawalFee = Number(currency['WithdrawFee']);
-                    const minimumWithdraw = Number(currency['MinWithdraw']);
-                    return {
-                        'symbol': code,
-                        'minimumWithdraw': Number(minimumWithdraw),
-                        'withdrawEnabled': withdrawEnabled,
-                        'withdrawalFee': Number(withdrawalFee),
-                        'depositFee': Number(0)
-                    }; 
-                } else {
-                    throw new ExchangeError (this.id + ' GetCoinFees failed: No Transaction fee in response');
-                }
+            if (id === code) {
+                let withdrawEnabled = (currency['ListingStatus'] === 'Active');
+                let status = currency['Status'].toLowerCase();
+                if (status !== 'ok')
+                    withdrawEnabled = false;
+                const withdrawalFee = Number(currency['WithdrawFee']);
+                const minimumWithdraw = Number(currency['MinWithdraw']);
+                return {
+                    'symbol': code,
+                    'minimumWithdraw': Number(minimumWithdraw),
+                    'withdrawEnabled': withdrawEnabled,
+                    'withdrawalFee': Number(withdrawalFee),
+                    'depositEnabled': withdrawEnabled,
+                    'depositFee': Number(0),
+                };
             }
-        }        
-        throw new ExchangeError (this.id + ' fetchCoinFees failed: ' + this.last_http_response + this.id);
+        }
+        throw new ExchangeError(this.id + ' fetchCoinFees failed: ' + this.last_http_response + this.id);
     }
 
     async fetchMarkets () {
@@ -626,17 +623,15 @@ module.exports = class cryptopia extends Exchange {
     }
 
     async fetchDepositAddress (currency, params = {}) {
-        let currencyId = this.currencyId (currency);
         let response = await this.privatePostGetDepositAddress (this.extend ({
-            'Currency': currencyId,
+            'Currency': currency,
         }, params));
-        let address = this.safeString (response['Data'], 'BaseAddress');
-        if (!address)
-            address = this.safeString (response['Data'], 'Address');
+        const address = this.safeString (response['Data'], 'Address');
         return {
             'currency': currency,
+            'tag' : response['Data']['BaseAddress'],
             'address': address,
-            'status': 'ok',
+            'status': response["Success"],
             'info': response,
         };
     }

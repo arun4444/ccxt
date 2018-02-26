@@ -184,10 +184,8 @@ module.exports = class gemini extends Exchange {
     }
 
     async fetchDepositAddress (code, params = {}) {
-        await this.loadMarkets ();
-        let currency = this.currency (code);
         let response = await this.privatePostDepositCurrencyNewAddress (this.extend ({
-            'currency': currency['id'],
+            'currency': code,
         }, params));
         if(response['address']){
             let address = this.safeString (response, 'address');
@@ -196,6 +194,7 @@ module.exports = class gemini extends Exchange {
                 'address': address,
                 'status': 'ok',
                 'info': response,
+                'tag': null,
             };
         }
         throw new ExchangeError (this.id + ' fetchDepositAddress failed: ' + this.last_http_response);

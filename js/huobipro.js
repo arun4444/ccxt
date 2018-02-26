@@ -75,6 +75,7 @@ module.exports = class huobipro extends Exchange {
                         'order/matchresults', // 查询当前成交、历史成交
                         'dw/withdraw-virtual/addresses', // 查询虚拟币提现地址
                         'dw/deposit-virtual/addresses',
+                        'dw/deposit-virtual/sharedAddressWithTag',
                         'dw/withdraw-virtual/fee',
                     ],
                     'post': [
@@ -123,15 +124,17 @@ module.exports = class huobipro extends Exchange {
             }
         }
 
-        if (coinData.name && response.data) {
-            const minimumWithdraw = this.safeString (coinData, 'withdraw-min-amount');
-            const withdrawEnabled = this.safeValue (coinData, 'withdraw-enabled');
-            let withdrawalFee = this.safeString (response, 'data');
+        if (coinData.name && response) {
+            const minimumWithdraw = coinData['withdraw-min-amount'];
+            const withdrawEnabled = coinData['withdraw-enabled'];
+            const depositEnabled = coinData['deposit-enabled'];
+            let withdrawalFee = response['data'];
             return {
                 'symbol': code,
                 'minimumWithdraw': Number(minimumWithdraw),
                 'withdrawEnabled': withdrawEnabled,
                 'withdrawalFee': Number(withdrawalFee),
+                'depositEnabled': depositEnabled,
                 'depositFee': Number(0)
             };
         } else {
@@ -489,20 +492,34 @@ module.exports = class huobipro extends Exchange {
     }
 
     async fetchDepositAddress (code, params = {}) {
-        await this.loadMarkets ();
-        let currency = this.currency (code);
         let request = {
-            'currency': currency.id.toLowerCase(),
+            'currency': code.toLowerCase(),
         };
-        let response = await this.privateGetDwDepositVirtualAddresses (this.extend (request, params));
+        let response;
+        try{
+            response = await this.privateGetDwDepositVirtualAddresses (this.extend (request, params));
+        } catch (e){
+            response = await this.privateGetDwDepositVirtualSharedAddressWithTag (this.extend (request, params));
+        }
         if(response['status'] === 'ok'){
-            let address = this.safeString (response, 'data');
-            return {
+            let address;
+            let tag;
+            let data = response['data'];
+            console.log(data)
+            if(data.address && data.tag){
+                address = data.address;
+                tag = data.tag;
+            } else {
+                address = data;
+                tag = null;
+            }
+            return( {
                 'currency': code,
                 'address': address,
                 'status': 'ok',
                 'info': response,
-            };
+                'tag':tag,
+            });
         }
         throw new ExchangeError (this.id + ' fetchDepositAddress failed: ' + this.last_http_response);
     }

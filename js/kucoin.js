@@ -175,23 +175,18 @@ module.exports = class kucoin extends Exchange {
         let response = await this.publicGetMarketOpenCoinInfo (this.extend ({
             'coin': code,
         }, params));
-        if (response.data && response.success && typeof response.data.withdrawFeeRate !== 'undefined') {
+        if (response.success) {
             const data = response.data
-            const minimumWithdraw = this.safeString (data, 'withdrawMinAmount');
-            const withdrawEnabledString = this.safeString (data, 'enableWithdraw');
-            let withdrawEnabled;
-            if (withdrawEnabledString === 'true'){
-                withdrawEnabled = true;
-            }
-            if (withdrawEnabledString === 'false'){
-                withdrawEnabled = false;
-            }
-            let withdrawalFee = this.safeString (data, 'withdrawFeeRate');
+            const minimumWithdraw = data['withdrawMinAmount'];
+            const withdrawEnabled = data['enableWithdraw'];
+            const withdrawalFee = data['withdrawFeeRate'];
+            const depositEnabled = data['enableDeposit'];
             return {
                 'symbol': code,
                 'minimumWithdraw': Number(minimumWithdraw),
                 'withdrawEnabled': withdrawEnabled,
                 'withdrawalFee': Number(withdrawalFee),
+                'depositEnabled': depositEnabled,
                 'depositFee': Number(0)
             };
         } else {
@@ -244,14 +239,12 @@ module.exports = class kucoin extends Exchange {
     }
 
     async fetchDepositAddress (code, params = {}) {
-        await this.loadMarkets ();
-        let currency = this.currency (code);
         let response = await this.privateGetAccountCoinWalletAddress (this.extend ({
-            'coin': currency['id'],
+            'coin': code,
         }, params));
         let data = response['data'];
-        let address = this.safeString (data, 'address');
-        let tag = this.safeString (data, 'userOid');
+        let address = data['address'];
+        let tag = null;
         return {
             'currency': code,
             'address': address,

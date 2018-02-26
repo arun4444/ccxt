@@ -155,24 +155,18 @@ module.exports = class bittrex extends Exchange {
         const response = await this.v2PostCurrencyGetCurrencyInfo (this.extend ({
             'currencyName': code,
         }, params));
-        if (typeof response.result.TxFee !== 'undefined') {
+        if (typeof response.result !== 'undefined') {
             const result = response.result;
-            const withdrawalFee = Number(this.safeString (result, 'TxFee'));
+            const withdrawalFee = Number(result['TxFee']);
             const minimumWithdraw = 3.00001*withdrawalFee;
-            const withdrawEnabledString = this.safeString (result, 'IsActive');
-            let withdrawEnabled;
-            if (withdrawEnabledString === 'true'){
-                withdrawEnabled = true;
-            }
-            if (withdrawEnabledString === 'false'){
-                withdrawEnabled = false;
-            }
+            const withdrawEnabled = result['IsActive'];
             return {
                 'symbol': code,
                 'minimumWithdraw': Number(minimumWithdraw),
                 'withdrawEnabled': withdrawEnabled,
                 'withdrawalFee': Number(withdrawalFee),
-                'depositFee': Number(0)
+                'depositEnabled':null,
+                'depositFee': Number(0),
             };
         } else {
             throw new ExchangeError (this.id + ' GetCoinFees failed: No Transaction fee in response');
@@ -644,21 +638,25 @@ module.exports = class bittrex extends Exchange {
     }
 
     async fetchDepositAddress (code, params = {}) {
-        await this.loadMarkets ();
-        let currency = this.currency (code);
         let response = await this.accountGetDepositaddress (this.extend ({
-            'currency': currency['id'],
+            'currency': code,
         }, params));
+        
+        let res = await this.publicGetCurrencies ({});
+        let allCurrencies = res['result'];
+        let baseAddress;
+        for (let i = 0; i < allCurrencies.length; i++) {
+            let cid = allCurrencies[i]['Currency'];
+            if(code===cid){
+                baseAddress = this.safeString (allCurrencies[i], 'BaseAddress');
+            }
+        }
         let address = this.safeString (response['result'], 'Address');
         let message = this.safeString (response, 'message');
-        let status = 'ok';
-        if (!address || message === 'ADDRESS_GENERATING')
-            status = 'pending';
-        let tag = undefined;
-        if ((code === 'XRP') || (code === 'XLM')) {
-            tag = address;
-            address = currency['address'];
-        }
+        let status = this.safeValue(response, 'success');
+        if (message === 'ADDRESS_GENERATING' || !status)
+            throw new ExchangeError ("INVALID ADDRESS BITTREX EXCHANGE "+code);
+        let tag = baseAddress;
         return {
             'currency': code,
             'address': address,
