@@ -90,8 +90,8 @@ module.exports = class acx extends Exchange {
                 },
             },
             'exceptions': {
-                2002: InsufficientFunds,
-                2003: OrderNotFound,
+                '2002': InsufficientFunds,
+                '2003': OrderNotFound,
             },
         });
     }
@@ -333,6 +333,7 @@ module.exports = class acx extends Exchange {
     }
 
     async withdraw (currency, amount, address, tag = undefined, params = {}) {
+        this.checkAddress (address);
         await this.loadMarkets ();
         let result = await this.privatePostWithdraw (this.extend ({
             'currency': currency.toLowerCase (),

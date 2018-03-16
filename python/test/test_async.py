@@ -3,12 +3,15 @@
 import argparse
 import asyncio
 import json
+# import logging
 import os
 import sys
 import time  # noqa: F401
 from os import _exit
 from traceback import format_tb
 
+# ------------------------------------------------------------------------------
+# logging.basicConfig(level=logging.INFO)
 # ------------------------------------------------------------------------------
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

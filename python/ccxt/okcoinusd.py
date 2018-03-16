@@ -147,12 +147,22 @@ class okcoinusd (Exchange):
                 '10005': AuthenticationError,  # bad apiKey
                 '10008': ExchangeError,  # Illegal URL parameter
             },
+            'options': {
+                'warnOnFetchOHLCVLimitArgument': True,
+            },
         })
 
     def fetch_markets(self):
         response = self.webGetMarketsProducts()
         markets = response['data']
         result = []
+        futureMarkets = {
+            'BCH/USD': True,
+            'BTC/USD': True,
+            'ETC/USD': True,
+            'ETH/USD': True,
+            'LTC/USD': True,
+        }
         for i in range(0, len(markets)):
             id = markets[i]['symbol']
             baseId, quoteId = id.split('_')
@@ -198,11 +208,14 @@ class okcoinusd (Exchange):
                 },
             })
             result.append(market)
-            if (self.has['futures']) and(market['quote'] == 'USDT'):
+            futureQuote = 'USD' if (market['quote'] == 'USDT') else market['quote']
+            futureSymbol = market['base'] + '/' + futureQuote
+            if (self.has['futures']) and(futureSymbol in list(futureMarkets.keys())):
                 result.append(self.extend(market, {
                     'quote': 'USD',
                     'symbol': market['base'] + '/USD',
                     'id': market['id'].replace('usdt', 'usd'),
+                    'quoteId': market['quoteId'].replace('usdt', 'usd'),
                     'type': 'future',
                     'spot': False,
                     'future': True,
@@ -309,7 +322,7 @@ class okcoinusd (Exchange):
         response = getattr(self, method)(self.extend(request, params))
         return self.parse_trades(response, market, since, limit)
 
-    def fetch_ohlcv(self, symbol, timeframe='1m', since=None, limit=1440, params={}):
+    def fetch_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
         self.load_markets()
         market = self.market(symbol)
         method = 'publicGet'
@@ -322,7 +335,9 @@ class okcoinusd (Exchange):
             request['contract_type'] = 'this_week'  # next_week, quarter
         method += 'Kline'
         if limit is not None:
-            request['size'] = int(limit)
+            if self.options['warnOnFetchOHLCVLimitArgument']:
+                raise ExchangeError(self.id + ' fetchOHLCV counts "limit" candles from current time backwards, therefore the "limit" argument for ' + self.id + ' is disabled. Set ' + self.id + '.options["warnOnFetchOHLCVLimitArgument"] = False to suppress self warning message.')
+            request['size'] = int(limit)  # max is 1440 candles
         if since is not None:
             request['since'] = since
         else:
@@ -407,7 +422,7 @@ class okcoinusd (Exchange):
         if status == 0:
             return 'open'
         if status == 1:
-            return 'partial'
+            return 'open'
         if status == 2:
             return 'closed'
         if status == 4:
@@ -489,7 +504,8 @@ class okcoinusd (Exchange):
         method += 'OrderInfo'
         response = getattr(self, method)(self.extend(request, params))
         ordersField = self.get_orders_field()
-        if len(response[ordersField]) > 0:
+        numOrders = len(response[ordersField])
+        if numOrders > 0:
             return self.parse_order(response[ordersField][0])
         raise OrderNotFound(self.id + ' order ' + id + ' not found')
 
@@ -548,12 +564,15 @@ class okcoinusd (Exchange):
         return self.filter_by(orders, 'status', 'closed')
 
     def withdraw(self, code, amount, address, tag=None, params={}):
+        self.check_address(address)
         self.load_markets()
         currency = self.currency(code)
         # if amount < 0.01:
         #     raise ExchangeError(self.id + ' withdraw() requires amount > 0.01')
+        # for some reason they require to supply a pair of currencies for withdrawing one currency
+        currencyId = currency['id'] + '_usd'
         request = {
-            'symbol': currency['id'],
+            'symbol': currencyId,
             'withdraw_address': address,
             'withdraw_amount': amount,
             'target': 'address',  # or okcn, okcom, okex

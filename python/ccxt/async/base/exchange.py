@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 
-__version__ = '1.10.1141'
+__version__ = '1.11.104'
 
 # -----------------------------------------------------------------------------
 
@@ -24,7 +24,9 @@ from ccxt.async.base.throttle import throttle
 # -----------------------------------------------------------------------------
 
 from ccxt.base.errors import ExchangeError
+from ccxt.base.errors import ExchangeNotAvailable
 from ccxt.base.errors import RequestTimeout
+from ccxt.base.errors import NotSupported
 
 # -----------------------------------------------------------------------------
 
@@ -46,7 +48,8 @@ class Exchange(BaseExchange):
         if 'asyncio_loop' in config:
             self.asyncio_loop = config['asyncio_loop']
         self.asyncio_loop = self.asyncio_loop or asyncio.get_event_loop()
-        if 'session' not in config:
+        self.own_session = 'session' not in config
+        if self.own_session:
             # Create out SSL context object with our CA cert file
             context = ssl.create_default_context(cafile=certifi.where())
             # Pass this SSL context to aiohttp and create a TCPConnector
@@ -61,7 +64,14 @@ class Exchange(BaseExchange):
         }, self.tokenBucket))
 
     def __del__(self):
-        self.asyncio_loop.run_until_complete(self.session.close())
+        if self.session is not None:
+            self.logger.warning(self.id + ' requires to release all resources with an explicit call to the .close() coroutine.')
+
+    async def close(self):
+        if self.session is not None:
+            if self.own_session:
+                await self.session.close()
+            self.session = None
 
     async def wait_for_token(self):
         while self.rateLimitTokens <= 1:
@@ -98,7 +108,9 @@ class Exchange(BaseExchange):
         url = self.proxy + url
 
         if self.verbose:
-            print(url, method, url, "\nRequest:", headers, body)
+            print("\nRequest:", method, url, headers, body)
+
+        self.logger.debug("%s %s, Request: %s %s", method, url, headers, body)
 
         encoded_body = body.encode() if body else None
         session_method = getattr(self.session, method.lower())
@@ -116,18 +128,21 @@ class Exchange(BaseExchange):
                 self.last_response_headers = response.headers
                 self.handle_errors(http_status_code, text, url, method, self.last_response_headers, text)
                 self.handle_rest_errors(None, http_status_code, text, url, method)
+                if self.verbose:
+                    print("\nResponse:", method, url, str(http_status_code), str(response.headers), self.last_http_response)
+                self.logger.debug("%s %s, Response: %s %s %s", method, url, response.status, response.headers, self.last_http_response)
 
         except socket.gaierror as e:
-            self.raise_error(ExchangeError, url, method, e, None)
+            self.raise_error(ExchangeNotAvailable, url, method, e, None)
 
         except concurrent.futures._base.TimeoutError as e:
             self.raise_error(RequestTimeout, method, url, e, None)
 
+        except aiohttp.client_exceptions.ClientConnectionError as e:
+            self.raise_error(ExchangeNotAvailable, url, method, e, None)
+
         except aiohttp.client_exceptions.ClientError as e:
             self.raise_error(ExchangeError, url, method, e, None)
-
-        if self.verbose:
-            print(method, url, "\nResponse:", headers, text)
 
         self.handle_errors(http_status_code, text, url, method, self.last_response_headers, text)
         return self.handle_rest_response(text, url, method, headers, body)
@@ -161,6 +176,13 @@ class Exchange(BaseExchange):
             'bids': self.sort_by(self.aggregate(orderbook['bids']), 0, True),
             'asks': self.sort_by(self.aggregate(orderbook['asks']), 0),
         })
+
+    async def fetch_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
+        if not self.has['fetchTrades']:
+            self.raise_error(NotSupported, details='fetch_ohlcv() not implemented yet')
+        await self.load_markets()
+        trades = await self.fetch_trades(symbol, since, limit, params)
+        return self.build_ohlcv(trades, timeframe, since, limit)
 
     async def fetch_full_tickers(self, symbols=None, params={}):
         tickers = await self.fetch_tickers(symbols, params)

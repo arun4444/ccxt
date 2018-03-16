@@ -68,7 +68,7 @@ module.exports = class therock extends Exchange {
             },
             'fees': {
                 'trading': {
-                    'maker': 0.02 / 100,
+                    'maker': 0.2 / 100,
                     'taker': 0.2 / 100,
                 },
                 'funding': {
@@ -152,6 +152,7 @@ module.exports = class therock extends Exchange {
         let symbol = undefined;
         if (market)
             symbol = market['symbol'];
+        let last = parseFloat (ticker['last']);
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -162,9 +163,9 @@ module.exports = class therock extends Exchange {
             'ask': parseFloat (ticker['ask']),
             'vwap': undefined,
             'open': parseFloat (ticker['open']),
-            'close': parseFloat (ticker['close']),
-            'first': undefined,
-            'last': parseFloat (ticker['last']),
+            'close': last,
+            'last': last,
+            'previousClose': parseFloat (ticker['close']), // previous day close, if any
             'change': undefined,
             'percentage': undefined,
             'average': undefined,

@@ -17,7 +17,6 @@ class bleutrade extends bittrex {
             'has' => array (
                 'CORS' => true,
                 'fetchTickers' => true,
-                'fetchOHLCV' => false,
             ),
             'urls' => array (
                 'logo' => 'https://user-images.githubusercontent.com/1294454/30303000-b602dbe6-976d-11e7-956d-36c5049c01e7.jpg',
@@ -82,6 +81,11 @@ class bleutrade extends bittrex {
                     ),
                 ),
             ),
+            'exceptions' => array (
+                'Insufficient funds!' => '\\ccxt\\InsufficientFunds',
+                'Invalid Order ID' => '\\ccxt\\InvalidOrder',
+                'Invalid apikey or apisecret' => '\\ccxt\\AuthenticationError',
+            ),
         ));
     }
 
@@ -144,23 +148,5 @@ class bleutrade extends bittrex {
         $response = $this->publicGetOrderbook (array_merge ($request, $params));
         $orderbook = $response['result'];
         return $this->parse_order_book($orderbook, null, 'buy', 'sell', 'Rate', 'Quantity');
-    }
-
-    public function throw_exception_on_error ($response) {
-        if (is_array ($response) && array_key_exists ('message', $response)) {
-            if ($response['message'] === 'Insufficient funds!')
-                throw new InsufficientFunds ($this->id . ' ' . $this->json ($response));
-            if ($response['message'] === 'MIN_TRADE_REQUIREMENT_NOT_MET')
-                throw new InvalidOrder ($this->id . ' ' . $this->json ($response));
-            if ($response['message'] === 'APIKEY_INVALID') {
-                if ($this->hasAlreadyAuthenticatedSuccessfully) {
-                    throw new DDoSProtection ($this->id . ' ' . $this->json ($response));
-                } else {
-                    throw new AuthenticationError ($this->id . ' ' . $this->json ($response));
-                }
-            }
-            if ($response['message'] === 'DUST_TRADE_DISALLOWED_MIN_VALUE_50K_SAT')
-                throw new InvalidOrder ($this->id . ' order cost should be over 50k satoshi ' . $this->json ($response));
-        }
     }
 }

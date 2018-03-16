@@ -18,13 +18,15 @@ module.exports = class huobipro extends Exchange {
             'version': 'v1',
             'accounts': undefined,
             'accountsById': undefined,
-            'hostname': 'api.huobi.pro',
+            'hostname': 'api.huobipro.com',
             'has': {
                 'getCoinFees': true,
                 'CORS': false,
                 'fetchOHCLV': true,
                 'fetchOrders': true,
+                'fetchOrder': true,
                 'fetchOpenOrders': true,
+                'fetchDepositAddress': true,
                 'withdraw': true,
                 'fetchDepositAddress':true,
             },
@@ -41,10 +43,10 @@ module.exports = class huobipro extends Exchange {
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27766569-15aa7b9a-5edd-11e7-9e7f-44791f4ee49c.jpg',
-                'api': 'https://api.huobi.pro',
-                'www': 'https://www.huobi.pro',
+                'api': 'https://api.huobipro.com',
+                'www': 'https://www.huobipro.com',
                 'doc': 'https://github.com/huobiapi/API_Docs/wiki/REST_api_reference',
-                'fees': 'https://www.huobi.pro/about/fee/',
+                'fees': 'https://www.huobipro.com/about/fee/',
             },
             'api': {
                 'market': {
@@ -200,22 +202,41 @@ module.exports = class huobipro extends Exchange {
         let symbol = undefined;
         if (market)
             symbol = market['symbol'];
-        let last = undefined;
-        if ('last' in ticker)
-            last = ticker['last'];
         let timestamp = this.milliseconds ();
         if ('ts' in ticker)
             timestamp = ticker['ts'];
         let bid = undefined;
         let ask = undefined;
+        let bidVolume = undefined;
+        let askVolume = undefined;
         if ('bid' in ticker) {
-            if (ticker['bid'])
+            if (Array.isArray (ticker['bid'])) {
                 bid = this.safeFloat (ticker['bid'], 0);
+                bidVolume = this.safeFloat (ticker['bid'], 1);
+            }
         }
         if ('ask' in ticker) {
-            if (ticker['ask'])
+            if (Array.isArray (ticker['ask'])) {
                 ask = this.safeFloat (ticker['ask'], 0);
+                askVolume = this.safeFloat (ticker['ask'], 1);
+            }
         }
+        let open = this.safeFloat (ticker, 'open');
+        let close = this.safeFloat (ticker, 'close');
+        let change = undefined;
+        let percentage = undefined;
+        let average = undefined;
+        if ((typeof open !== 'undefined') && (typeof close !== 'undefined')) {
+            change = close - open;
+            average = this.sum (open, close) / 2;
+            if ((typeof close !== 'undefined') && (close > 0))
+                percentage = (change / open) * 100;
+        }
+        let baseVolume = this.safeFloat (ticker, 'amount');
+        let quoteVolume = this.safeFloat (ticker, 'vol');
+        let vwap = undefined;
+        if (typeof baseVolume !== 'undefined' && typeof quoteVolume !== 'undefined' && baseVolume > 0)
+            vwap = quoteVolume / baseVolume;
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -223,17 +244,18 @@ module.exports = class huobipro extends Exchange {
             'high': ticker['high'],
             'low': ticker['low'],
             'bid': bid,
+            'bidVolume': bidVolume,
             'ask': ask,
-            'vwap': undefined,
-            'open': ticker['open'],
-            'close': ticker['close'],
-            'first': undefined,
-            'last': last,
-            'change': undefined,
-            'percentage': undefined,
-            'average': undefined,
-            'baseVolume': parseFloat (ticker['amount']),
-            'quoteVolume': ticker['vol'],
+            'askVolume': askVolume,
+            'vwap': vwap,
+            'open': open,
+            'close': close,
+            'last': close,
+            'change': change,
+            'percentage': percentage,
+            'average': average,
+            'baseVolume': baseVolume,
+            'quoteVolume': quoteVolume,
             'info': ticker,
         };
     }
@@ -279,17 +301,6 @@ module.exports = class huobipro extends Exchange {
         };
     }
 
-    parseTradesData (data, market, since = undefined, limit = undefined) {
-        let result = [];
-        for (let i = 0; i < data.length; i++) {
-            let trades = this.parseTrades (data[i]['data'], market, since, limit);
-            for (let k = 0; k < trades.length; k++) {
-                result.push (trades[k]);
-            }
-        }
-        return result;
-    }
-
     async fetchTrades (symbol, since = undefined, limit = undefined, params = {}) {
         await this.loadMarkets ();
         let market = this.market (symbol);
@@ -297,7 +308,17 @@ module.exports = class huobipro extends Exchange {
             'symbol': market['id'],
             'size': 2000,
         }, params));
-        return this.parseTradesData (response['data'], market, since, limit);
+        let data = response['data'];
+        let result = [];
+        for (let i = 0; i < data.length; i++) {
+            let trades = data[i]['data'];
+            for (let j = 0; j < trades.length; j++) {
+                let trade = this.parseTrade (trades[j], market);
+                result.push (trade);
+            }
+        }
+        result = this.sortBy (result, 'timestamp');
+        return this.filterBySymbolSinceLimit (result, symbol, since, limit);
     }
 
     parseOHLCV (ohlcv, market = undefined, timeframe = '1m', since = undefined, limit = undefined) {
@@ -405,6 +426,14 @@ module.exports = class huobipro extends Exchange {
         }, params));
     }
 
+    async fetchOrder (id, symbol = undefined, params = {}) {
+        await this.loadMarkets ();
+        let response = await this.privateGetOrderOrdersId (this.extend ({
+            'id': id,
+        }, params));
+        return this.parseOrder (response['data']);
+    }
+
     parseOrderStatus (status) {
         if (status === 'partial-filled') {
             return 'open';
@@ -450,7 +479,7 @@ module.exports = class huobipro extends Exchange {
             average = parseFloat (cost / filled);
         let result = {
             'info': order,
-            'id': order['id'],
+            'id': order['id'].toString (),
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
             'symbol': symbol,
@@ -524,7 +553,26 @@ module.exports = class huobipro extends Exchange {
         throw new ExchangeError (this.id + ' fetchDepositAddress failed: ' + this.last_http_response);
     }
 
+    calculateFee (symbol, type, side, amount, price, takerOrMaker = 'taker', params = {}) {
+        let market = this.markets[symbol];
+        let rate = market[takerOrMaker];
+        let cost = parseFloat (this.costToPrecision (symbol, amount * rate));
+        let key = 'quote';
+        if (side === 'sell') {
+            cost *= price;
+        } else {
+            key = 'base';
+        }
+        return {
+            'type': takerOrMaker,
+            'currency': market[key],
+            'rate': rate,
+            'cost': parseFloat (this.feeToPrecision (symbol, cost)),
+        };
+    }
+
     async withdraw (currency, amount, address, tag = undefined, params = {}) {
+        this.checkAddress (address);
         let request = {
             'address': address, // only supports existing addresses in your withdraw address list
             'amount': amount,

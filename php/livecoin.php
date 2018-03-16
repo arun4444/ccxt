@@ -22,6 +22,7 @@ class livecoin extends Exchange {
                 'fetchOrders' => true,
                 'fetchOpenOrders' => true,
                 'fetchClosedOrders' => true,
+                'withdraw' => true,
             ),
             'urls' => array (
                 'logo' => 'https://user-images.githubusercontent.com/1294454/27980768-f22fc424-638a-11e7-89c9-6010a54ff9be.jpg',
@@ -487,6 +488,26 @@ class livecoin extends Exchange {
         throw new ExchangeError ($this->id . ' cancelOrder() failed => ' . $this->json ($response));
     }
 
+    public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
+        // Sometimes the $response with be array ( key => null ) for all keys.
+        // An example is if you attempt to withdraw more than is allowed when $withdrawal fees are considered.
+        $this->load_markets();
+        $this->check_address($address);
+        $wallet = $address;
+        if ($tag !== null)
+            $wallet .= '::' . $tag;
+        $withdrawal = array (
+            'amount' => $amount,
+            'currency' => $this->common_currency_code($currency),
+            'wallet' => $wallet,
+        );
+        $response = $this->privatePostPaymentOutCoin (array_merge ($withdrawal, $params));
+        return array (
+            'info' => $response,
+            'id' => $this->safe_integer($response, 'id'),
+        );
+    }
+
     public function fetch_deposit_address ($currency, $params = array ()) {
         $request = array (
             'currency' => $currency,
@@ -499,6 +520,7 @@ class livecoin extends Exchange {
             $address = $parts[0];
             $tag = $parts[2];
         }
+        $this->check_address($address);
         return array (
             'currency' => $currency,
             'address' => $address,
@@ -562,6 +584,8 @@ class livecoin extends Exchange {
                         throw new InvalidOrder ($this->id . ' => Unable to block funds ' . $this->json ($response));
                     } else if ($error === 503) {
                         throw new ExchangeNotAvailable ($this->id . ' => Exchange is not available ' . $this->json ($response));
+                    } else if ($error === 429) {
+                        throw new DDoSProtection ($this->id . ' => Too many requests' . $this->json ($response));
                     } else {
                         throw new ExchangeError ($this->id . ' ' . $this->json ($response));
                     }
