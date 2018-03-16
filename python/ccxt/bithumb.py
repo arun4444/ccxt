@@ -145,6 +145,11 @@ class bithumb (Exchange):
         symbol = None
         if market:
             symbol = market['symbol']
+        open = self.safe_float(ticker, 'opening_price')
+        close = self.safe_float(ticker, 'closing_price')
+        change = close - open
+        vwap = self.safe_float(ticker, 'average_price')
+        baseVolume = self.safe_float(ticker, 'volume_1day')
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -153,16 +158,16 @@ class bithumb (Exchange):
             'low': self.safe_float(ticker, 'min_price'),
             'bid': self.safe_float(ticker, 'buy_price'),
             'ask': self.safe_float(ticker, 'sell_price'),
-            'vwap': None,
-            'open': self.safe_float(ticker, 'opening_price'),
-            'close': self.safe_float(ticker, 'closing_price'),
-            'first': None,
-            'last': self.safe_float(ticker, 'last_trade'),
-            'change': None,
-            'percentage': None,
-            'average': self.safe_float(ticker, 'average_price'),
-            'baseVolume': self.safe_float(ticker, 'volume_1day'),
-            'quoteVolume': None,
+            'vwap': vwap,
+            'open': open,
+            'close': close,
+            'last': close,
+            'previousClose': None,
+            'change': change,
+            'percentage': change / open * 100,
+            'average': self.sum(open, close) / 2,
+            'baseVolume': baseVolume,
+            'quoteVolume': baseVolume * vwap,
             'info': ticker,
         }
 
@@ -268,6 +273,7 @@ class bithumb (Exchange):
         })
 
     def withdraw(self, currency, amount, address, tag=None, params={}):
+        self.check_address(address)
         request = {
             'units': amount,
             'address': address,

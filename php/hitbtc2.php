@@ -720,6 +720,24 @@ class hitbtc2 extends hitbtc {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $baseVolume = $this->safe_float($ticker, 'volume');
+        $quoteVolume = $this->safe_float($ticker, 'volumeQuote');
+        $open = $this->safe_float($ticker, 'open');
+        $last = $this->safe_float($ticker, 'last');
+        $change = null;
+        $percentage = null;
+        $average = null;
+        if ($last !== null && $open !== null) {
+            $change = $last - $open;
+            $average = $this->sum ($last, $open) / 2;
+            if ($open > 0)
+                $percentage = $change / $open * 100;
+        }
+        $vwap = null;
+        if ($quoteVolume !== null)
+            if ($baseVolume !== null)
+                if ($baseVolume > 0)
+                    $vwap = $quoteVolume / $baseVolume;
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -728,16 +746,16 @@ class hitbtc2 extends hitbtc {
             'low' => $this->safe_float($ticker, 'low'),
             'bid' => $this->safe_float($ticker, 'bid'),
             'ask' => $this->safe_float($ticker, 'ask'),
-            'vwap' => null,
-            'open' => $this->safe_float($ticker, 'open'),
-            'close' => $this->safe_float($ticker, 'close'),
-            'first' => null,
-            'last' => $this->safe_float($ticker, 'last'),
-            'change' => null,
-            'percentage' => null,
-            'average' => null,
-            'baseVolume' => $this->safe_float($ticker, 'volume'),
-            'quoteVolume' => $this->safe_float($ticker, 'volumeQuote'),
+            'vwap' => $vwap,
+            'open' => $open,
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
+            'change' => $change,
+            'percentage' => $percentage,
+            'average' => $average,
+            'baseVolume' => $baseVolume,
+            'quoteVolume' => $quoteVolume,
             'info' => $ticker,
         );
     }
@@ -978,18 +996,20 @@ class hitbtc2 extends hitbtc {
         if ($since !== null)
             $request['from'] = $this->iso8601 ($since);
         $response = $this->privateGetHistoryOrder (array_merge ($request, $params));
-        return $this->parse_orders($response, $market, $since, $limit);
+        $orders = $this->parse_orders($response, $market);
+        $orders = $this->filter_by($orders, 'status', 'closed');
+        return $this->filter_by_since_limit($orders, $since, $limit);
     }
 
     public function fetch_my_trades ($symbol = null, $since = null, $limit = null, $params = array ()) {
         $this->load_markets();
         $request = array (
             // 'symbol' => 'BTC/USD', // optional
-            // 'sort' => 'DESC', // or 'ASC'
-            // 'by' => 'timestamp', // or 'id'	String	timestamp by default, or id
-            // 'from':	'Datetime or Number', // ISO 8601
-            // 'till':	'Datetime or Number',
-            // 'limit' => 100,
+            // 'sort' =>   'DESC', // or 'ASC'
+            // 'by' =>     'timestamp', // or 'id' String timestamp by default, or id
+            // 'from' =>   'Datetime or Number', // ISO 8601
+            // 'till' =>   'Datetime or Number',
+            // 'limit' =>  100,
             // 'offset' => 0,
         );
         $market = null;
@@ -1029,6 +1049,7 @@ class hitbtc2 extends hitbtc {
             'currency' => $currency['id'],
         ));
         $address = $response['address'];
+        $this->check_address($address);
         $tag = $this->safe_string($response, 'paymentId');
         return array (
             'currency' => $currency,
@@ -1046,6 +1067,7 @@ class hitbtc2 extends hitbtc {
             'currency' => $currency['id'],
         ));
         $address = $response['address'];
+        $this->check_address($address);
         $tag = $this->safe_string($response, 'paymentId');
         return array (
             'currency' => $currency,
@@ -1057,6 +1079,7 @@ class hitbtc2 extends hitbtc {
     }
 
     public function withdraw ($code, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $currency = $this->currency ($code);
         $request = array (
             'currency' => $currency['id'],

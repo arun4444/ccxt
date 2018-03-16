@@ -43,11 +43,21 @@ php -f path/to/example.php # substitute for actual filename here
 
 [Enigma Catalyst](https://blog.enigma.co/enigma-announces-catalyst-0-4-our-biggest-release-yet-fa31a5ffa4b1) – The major effort towards decentralized exchanges integrates ccxt!
 
-[Looking for arbitrage opportunies with ccxt](https://steemit.com/steemdev/@codewithcheese/looking-for-arbitrage-opportunies-with-javascript-library-cctx-supporting-70-exchanges) – An article @steemit on getting started with ccxt.
+[Projects based on ccxt](https://github.com/ccxt/ccxt/network/dependents) – A list of hundreds of ccxt-based projects by developers from all over the world!
+
+[CC Power Analytics Part 1: How to get the data of the exchanges](https://www.linkedin.com/pulse/part-1-cc-power-analytics-how-get-data-exchanges-steve-rein/) – The first part of a series of articles on cryptocurrency analytics.
+
+[Looking for arbitrage opportunies with ccxt](https://steemit.com/steemdev/@codewithcheese/looking-for-arbitrage-opportunies-with-javascript-library-cctx-supporting-70-exchanges) – An article @steemit on getting arbitrage started with ccxt for crypto-arbitrage.
 
 [A n00bs Guide To Deep Cryptocurrency Trading](https://medium.com/@LeonFedden/deep-cryptocurrency-trading-1e64af6d280a) – An article @ Medium on deep neural trading using ccxt for backend tasks.
 
 [Let’s write a cryptocurrency bot](https://medium.com/@joeldg/an-advanced-tutorial-a-new-crypto-currency-trading-bot-boilerplate-framework-e777733607ae) – A multi-part advanced tutorial on a new cryptocurrency trading framework also integrating ccxt.
+
+[Python3とCCXTライブラリを用いたBitMEX自動売買bot作成Tips](https://note.mu/akagami/n/n0af0a96c261f) – An article in Japanese on getting started with CCXT and a few bot tips.
+
+[ccxtを使って裁定取引botを作ってみたらなぜか虚しくなった件](https://qiita.com/reon777/items/21ed87f19cdd50f08bd9) – An article in Japanese explaining the basics of programming an arbitrage bot with CCXT.
+
+[Лучшая криптотрейдинг библиотека?](http://medium.com/@vladthelittleone/лучшая-криптотрейдинг-библиотека-67e308f96c1f) – An article in Russian on setting up CCXT to connect and trade with crypto exchanges.
 
 [Using ccxt and technicalindicators to calculate MACD for BTC/USDT with Node.js](https://runkit.com/dhilipb/macd-for-btc-usdt) – A runkit sample showing how to fetch data and run statistical calculations.
 
@@ -58,8 +68,6 @@ php -f path/to/example.php # substitute for actual filename here
 [CryptoMon Bot](https://github.com/jchristov/cryptomon-bot) - helps tracking of your cryptocurrency investments and making smart, informed buy/sell decisions.
 
 [ZenBot](https://github.com/carlos8f/zenbot) - a command-line cryptocurrency trading bot using Node.js and MongoDB.
-
-[co3k-crypto-currency-note](https://github.com/co3k/co3k-crypto-currency-note/blob/master/Untitled.ipynb) – an Python example of using ccxt to fetch OHLCV candles from Kraken and charting them with matplotlib in a Jupyter Notebook, made by [co3k](https://github.com/co3k).
 
 [bitcoin-chart-cli](https://github.com/madnight/bitcoin-chart-cli) by [madnight](https://github.com/madnight) – a command-line console util that draws Bitcoin, Ether, Litecoin and many altcoin charts right in the terminal!
 

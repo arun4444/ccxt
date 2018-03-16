@@ -79,6 +79,7 @@ class cryptopia extends Exchange {
         $currencies = array (
             'ACC' => 'AdCoin',
             'BAT' => 'BatCoin',
+            'BLZ' => 'BlazeCoin',
             'CC' => 'CCX',
             'CMT' => 'Comet',
             'FCN' => 'Facilecoin',
@@ -97,6 +98,7 @@ class cryptopia extends Exchange {
         $currencies = array (
             'AdCoin' => 'ACC',
             'BatCoin' => 'BAT',
+            'BlazeCoin' => 'BLZ',
             'CCX' => 'CC',
             'Comet' => 'CMT',
             'Cubits' => 'QBT',
@@ -214,6 +216,16 @@ class cryptopia extends Exchange {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $open = $this->safe_float($ticker, 'Open');
+        $last = $this->safe_float($ticker, 'LastPrice');
+        $change = $last - $open;
+        $baseVolume = $this->safe_float($ticker, 'Volume');
+        $quoteVolume = $this->safe_float($ticker, 'BaseVolume');
+        $vwap = null;
+        if ($quoteVolume !== null)
+            if ($baseVolume !== null)
+                if ($baseVolume > 0)
+                    $vwap = $quoteVolume / $baseVolume;
         return array (
             'symbol' => $symbol,
             'info' => $ticker,
@@ -223,16 +235,16 @@ class cryptopia extends Exchange {
             'low' => floatval ($ticker['Low']),
             'bid' => floatval ($ticker['BidPrice']),
             'ask' => floatval ($ticker['AskPrice']),
-            'vwap' => null,
-            'open' => floatval ($ticker['Open']),
-            'close' => floatval ($ticker['Close']),
-            'first' => null,
-            'last' => floatval ($ticker['LastPrice']),
-            'change' => floatval ($ticker['Change']),
-            'percentage' => null,
-            'average' => null,
-            'baseVolume' => floatval ($ticker['Volume']),
-            'quoteVolume' => floatval ($ticker['BaseVolume']),
+            'vwap' => $vwap,
+            'open' => $open,
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
+            'change' => $change,
+            'percentage' => floatval ($ticker['Change']),
+            'average' => $this->sum ($last, $open) / 2,
+            'baseVolume' => $baseVolume,
+            'quoteVolume' => $quoteVolume,
         );
     }
 
@@ -261,7 +273,7 @@ class cryptopia extends Exchange {
             $symbol = $market['symbol'];
             $result[$symbol] = $this->parse_ticker($ticker, $market);
         }
-        return $result;
+        return $this->filter_by_array($result, 'symbol', $symbols);
     }
 
     public function parse_trade ($trade, $market = null) {
@@ -315,7 +327,7 @@ class cryptopia extends Exchange {
         if ($since !== null) {
             $elapsed = $this->milliseconds () - $since;
             $hour = 1000 * 60 * 60;
-            $hours = intval ($elapsed / $hour);
+            $hours = intval ((int) ceil ($elapsed / $hour));
         }
         $request = array (
             'id' => $market['id'],
@@ -600,6 +612,7 @@ class cryptopia extends Exchange {
         $address = $this->safe_string($response['Data'], 'BaseAddress');
         if (!$address)
             $address = $this->safe_string($response['Data'], 'Address');
+        $this->check_address($address);
         return array (
             'currency' => $currency,
             'address' => $address,
@@ -609,6 +622,7 @@ class cryptopia extends Exchange {
     }
 
     public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $currencyId = $this->currency_id ($currency);
         $request = array (
             'Currency' => $currencyId,

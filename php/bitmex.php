@@ -19,6 +19,8 @@ class bitmex extends Exchange {
                 'CORS' => false,
                 'fetchOHLCV' => true,
                 'withdraw' => true,
+                'editOrder' => true,
+                'fetchOrder' => true,
                 'fetchOrders' => true,
                 'fetchOpenOrders' => true,
                 'fetchClosedOrders' => true,
@@ -223,19 +225,30 @@ class bitmex extends Exchange {
         return $result;
     }
 
+    public function fetch_order ($id, $symbol = null, $params = array ()) {
+        $filter = array ( 'filter' => array ( 'orderID' => $id ));
+        $result = $this->fetch_orders($symbol, null, null, array_replace_recursive ($filter, $params));
+        $numResults = is_array ($result) ? count ($result) : 0;
+        if ($numResults === 1)
+            return $result[0];
+        throw new OrderNotFound ($this->id . ' => The order ' . $id . ' not found.');
+    }
+
     public function fetch_orders ($symbol = null, $since = null, $limit = null, $params = array ()) {
         $this->load_markets();
         $market = null;
-        $filter = array ();
+        $request = array ();
         if ($symbol !== null) {
             $market = $this->market ($symbol);
-            $filter['symbol'] = $market['id'];
+            $request['symbol'] = $market['id'];
         }
-        $request = array_replace_recursive (array (
-            'filter' => $filter,
-        ), $params);
+        if ($since !== null)
+            $request['startTime'] = $this->iso8601 ($since);
+        if ($limit !== null)
+            $request['count'] = $limit;
+        $request = array_replace_recursive ($request, $params);
         // why the hassle? urlencode in python is kinda broken for nested dicts.
-        // E.g. self.urlencode(array ("$filter" => array ("open" => True))) will return "$filter=array ('open':+True)"
+        // E.g. self.urlencode(array ("filter" => array ("open" => True))) will return "filter=array ('open':+True)"
         // Bitmex doesn't like that. Hence resorting to this hack.
         $request['filter'] = $this->json ($request['filter']);
         $response = $this->privateGetOrder ($request);
@@ -244,7 +257,7 @@ class bitmex extends Exchange {
 
     public function fetch_open_orders ($symbol = null, $since = null, $limit = null, $params = array ()) {
         $filter_params = array ( 'filter' => array ( 'open' => true ));
-        return $this->fetch_orders($symbol, $since, $limit, array_merge ($filter_params, $params));
+        return $this->fetch_orders($symbol, $since, $limit, array_replace_recursive ($filter_params, $params));
     }
 
     public function fetch_closed_orders ($symbol = null, $since = null, $limit = null, $params = array ()) {
@@ -271,6 +284,9 @@ class bitmex extends Exchange {
         $tickers = $this->publicGetTradeBucketed ($request);
         $ticker = $tickers[0];
         $timestamp = $this->milliseconds ();
+        $open = $this->safe_float($ticker, 'open');
+        $close = $this->safe_float($ticker, 'close');
+        $change = $close - $open;
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -280,13 +296,13 @@ class bitmex extends Exchange {
             'bid' => floatval ($quote['bidPrice']),
             'ask' => floatval ($quote['askPrice']),
             'vwap' => floatval ($ticker['vwap']),
-            'open' => null,
-            'close' => floatval ($ticker['close']),
-            'first' => null,
-            'last' => null,
-            'change' => null,
-            'percentage' => null,
-            'average' => null,
+            'open' => $open,
+            'close' => $close,
+            'last' => $close,
+            'previousClose' => null,
+            'change' => $change,
+            'percentage' => $change / $open * 100,
+            'average' => $this->sum ($open, $close) / 2,
             'baseVolume' => floatval ($ticker['homeNotional']),
             'quoteVolume' => floatval ($ticker['foreignNotional']),
             'info' => $ticker,
@@ -305,7 +321,7 @@ class bitmex extends Exchange {
         ];
     }
 
-    public function fetch_ohlcv ($symbol, $timeframe = '1m', $since = null, $limit = null, $params = array ()) {
+    public function fetch_ohlcv ($symbol, $timeframe = '1m', $since = null, $limit = 100, $params = array ()) {
         $this->load_markets();
         // send JSON key/value pairs, such as array ("key" => "value")
         // $filter by individual fields and do advanced queries on timestamps
@@ -318,19 +334,19 @@ class bitmex extends Exchange {
             'symbol' => $market['id'],
             'binSize' => $this->timeframes[$timeframe],
             'partial' => true,     // true == include yet-incomplete current bins
+            'count' => $limit,      // default 100, max 500
             // 'filter' => $filter, // $filter by individual fields and do advanced queries
             // 'columns' => array (),    // will return all columns if omitted
             // 'start' => 0,       // starting point for results (wtf?)
             // 'reverse' => false, // true == newest first
             // 'endTime' => '',    // ending date $filter for results
         );
+        // if $since is not set, they will return candles starting from 2017-01-01
         if ($since !== null) {
             $ymdhms = $this->ymdhms ($since);
             $ymdhm = mb_substr ($ymdhms, 0, 16);
             $request['startTime'] = $ymdhm; // starting date $filter for results
         }
-        if ($limit !== null)
-            $request['count'] = $limit; // default 100
         $response = $this->publicGetTradeBucketed (array_merge ($request, $params));
         return $this->parse_ohlcvs($response, $market, $timeframe, $since, $limit);
     }
@@ -395,7 +411,7 @@ class bitmex extends Exchange {
             $timestamp = $this->parse8601 ($datetime_value);
             $iso8601 = $this->iso8601 ($timestamp);
         }
-        $price = floatval ($order['price']);
+        $price = $this->safe_float($order, 'price');
         $amount = floatval ($order['orderQty']);
         $filled = $this->safe_float($order, 'cumQty', 0.0);
         $remaining = max ($amount - $filled, 0.0);
@@ -425,38 +441,60 @@ class bitmex extends Exchange {
     public function fetch_trades ($symbol, $since = null, $limit = null, $params = array ()) {
         $this->load_markets();
         $market = $this->market ($symbol);
-        $response = $this->publicGetTrade (array_merge (array (
+        $request = array (
             'symbol' => $market['id'],
-        ), $params));
-        return $this->parse_trades($response, $market, $since, $limit);
+        );
+        if ($since !== null)
+            $request['startTime'] = $this->iso8601 ($since);
+        if ($limit !== null)
+            $request['count'] = $limit;
+        $response = $this->publicGetTrade (array_merge ($request, $params));
+        return $this->parse_trades($response, $market);
     }
 
     public function create_order ($symbol, $type, $side, $amount, $price = null, $params = array ()) {
         $this->load_markets();
-        $order = array (
+        $request = array (
             'symbol' => $this->market_id($symbol),
             'side' => $this->capitalize ($side),
             'orderQty' => $amount,
             'ordType' => $this->capitalize ($type),
         );
         if ($type === 'limit')
-            $order['price'] = $price;
-        $response = $this->privatePostOrder (array_merge ($order, $params));
-        return array (
-            'info' => $response,
-            'id' => $response['orderID'],
+            $request['price'] = $price;
+        $response = $this->privatePostOrder (array_merge ($request, $params));
+        $order = $this->parse_order($response);
+        $id = $order['id'];
+        $this->orders[$id] = $order;
+        return array_merge (array ( 'info' => $response ), $order);
+    }
+
+    public function edit_order ($id, $symbol, $type, $side, $amount = null, $price = null, $params = array ()) {
+        $this->load_markets();
+        $request = array (
+            'orderID' => $id,
         );
+        if ($amount !== null)
+            $request['orderQty'] = $amount;
+        if ($price !== null)
+            $request['price'] = $price;
+        $response = $this->privatePutOrder (array_merge ($request, $params));
+        $order = $this->parse_order($response);
+        $this->orders[$order['id']] = $order;
+        return array_merge (array ( 'info' => $response ), $order);
     }
 
     public function cancel_order ($id, $symbol = null, $params = array ()) {
         $this->load_markets();
-        $response = $this->privateDeleteOrder (array ( 'orderID' => $id ));
+        $response = $this->privateDeleteOrder (array_merge (array ( 'orderID' => $id ), $params));
         $order = $response[0];
         $error = $this->safe_string($order, 'error');
         if ($error !== null)
             if (mb_strpos ($error, 'Unable to cancel $order due to existing state') !== false)
                 throw new OrderNotFound ($this->id . ' cancelOrder() failed => ' . $error);
-        return $this->parse_order($order);
+        $order = $this->parse_order($order);
+        $this->orders[$order['id']] = $order;
+        return array_merge (array ( 'info' => $response ), $order);
     }
 
     public function is_fiat ($currency) {
@@ -468,6 +506,7 @@ class bitmex extends Exchange {
     }
 
     public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $this->load_markets();
         if ($currency !== 'BTC')
             throw new ExchangeError ($this->id . ' supoprts BTC withdrawals only, other currencies coming soon...');
@@ -494,6 +533,11 @@ class bitmex extends Exchange {
                     $response = json_decode ($body, $as_associative_array = true);
                     if (is_array ($response) && array_key_exists ('error', $response)) {
                         if (is_array ($response['error']) && array_key_exists ('message', $response['error'])) {
+                            $message = $this->safe_value($response['error'], 'message');
+                            if ($message !== null) {
+                                if ($message === 'Invalid API Key.')
+                                    throw new AuthenticationError ($this->id . ' ' . $this->json ($response));
+                            }
                             // stub $code, need proper handling
                             throw new ExchangeError ($this->id . ' ' . $this->json ($response));
                         }

@@ -747,24 +747,42 @@ module.exports = class hitbtc2 extends hitbtc {
         let symbol = undefined;
         if (market)
             symbol = market['symbol'];
+        let baseVolume = this.safeFloat (ticker, 'volume');
+        let quoteVolume = this.safeFloat (ticker, 'volumeQuote');
+        let open = this.safeFloat (ticker, 'open');
+        let last = this.safeFloat (ticker, 'last');
+        let change = undefined;
+        let percentage = undefined;
+        let average = undefined;
+        if (typeof last !== 'undefined' && typeof open !== 'undefined') {
+            change = last - open;
+            average = this.sum (last, open) / 2;
+            if (open > 0)
+                percentage = change / open * 100;
+        }
+        let vwap = undefined;
+        if (typeof quoteVolume !== 'undefined')
+            if (typeof baseVolume !== 'undefined')
+                if (baseVolume > 0)
+                    vwap = quoteVolume / baseVolume;
         return {
             'symbol': symbol,
             'timestamp': timestamp,
-            'datetime': this.iso8601(timestamp),
-            'high': this.safeFloat(ticker, 'high'),
-            'low': this.safeFloat(ticker, 'low'),
-            'bid': this.safeFloat(ticker, 'bid'),
-            'ask': this.safeFloat(ticker, 'ask'),
-            'vwap': undefined,
-            'open': this.safeFloat(ticker, 'open'),
-            'close': this.safeFloat(ticker, 'close'),
-            'first': undefined,
-            'last': this.safeFloat(ticker, 'last'),
-            'change': undefined,
-            'percentage': undefined,
-            'average': undefined,
-            'baseVolume': this.safeFloat(ticker, 'volume'),
-            'quoteVolume': this.safeFloat(ticker, 'volumeQuote'),
+            'datetime': this.iso8601 (timestamp),
+            'high': this.safeFloat (ticker, 'high'),
+            'low': this.safeFloat (ticker, 'low'),
+            'bid': this.safeFloat (ticker, 'bid'),
+            'ask': this.safeFloat (ticker, 'ask'),
+            'vwap': vwap,
+            'open': open,
+            'close': last,
+            'last': last,
+            'previousClose': undefined,
+            'change': change,
+            'percentage': percentage,
+            'average': average,
+            'baseVolume': baseVolume,
+            'quoteVolume': quoteVolume,
             'info': ticker,
         };
     }
@@ -1003,20 +1021,22 @@ module.exports = class hitbtc2 extends hitbtc {
         if (typeof limit !== 'undefined')
             request['limit'] = limit;
         if (typeof since !== 'undefined')
-            request['from'] = this.iso8601(since);
-        let response = await this.privateGetHistoryOrder(this.extend(request, params));
-        return this.parseOrders(response, market, since, limit);
+            request['from'] = this.iso8601 (since);
+        let response = await this.privateGetHistoryOrder (this.extend (request, params));
+        let orders = this.parseOrders (response, market);
+        orders = this.filterBy (orders, 'status', 'closed');
+        return this.filterBySinceLimit (orders, since, limit);
     }
 
     async fetchMyTrades(symbol = undefined, since = undefined, limit = undefined, params = {}) {
         await this.loadMarkets();
         let request = {
             // 'symbol': 'BTC/USD', // optional
-            // 'sort': 'DESC', // or 'ASC'
-            // 'by': 'timestamp', // or 'id'	String	timestamp by default, or id
-            // 'from':	'Datetime or Number', // ISO 8601
-            // 'till':	'Datetime or Number',
-            // 'limit': 100,
+            // 'sort':   'DESC', // or 'ASC'
+            // 'by':     'timestamp', // or 'id' String timestamp by default, or id
+            // 'from':   'Datetime or Number', // ISO 8601
+            // 'till':   'Datetime or Number',
+            // 'limit':  100,
             // 'offset': 0,
         };
         let market = undefined;
@@ -1056,7 +1076,8 @@ module.exports = class hitbtc2 extends hitbtc {
             'currency': currency['id'],
         });
         let address = response['address'];
-        let tag = this.safeString(response, 'paymentId');
+        this.checkAddress (address);
+        let tag = this.safeString (response, 'paymentId');
         return {
             'currency': currency,
             'address': address,
@@ -1071,10 +1092,8 @@ module.exports = class hitbtc2 extends hitbtc {
             'currency': code,
         });
         let address = response['address'];
-        let tag = response['paymentId'];
-        if (!tag) {
-            tag = null;
-        }
+        this.checkAddress (address);
+        let tag = this.safeString (response, 'paymentId');
         return {
             'currency': code,
             'address': address,
@@ -1084,8 +1103,9 @@ module.exports = class hitbtc2 extends hitbtc {
         };
     }
 
-    async withdraw(code, amount, address, tag = undefined, params = {}) {
-        let currency = this.currency(code);
+    async withdraw (code, amount, address, tag = undefined, params = {}) {
+        this.checkAddress (address);
+        let currency = this.currency (code);
         let request = {
             'currency': currency['id'],
             'amount': parseFloat(amount),

@@ -117,20 +117,20 @@ class _1btcxe extends Exchange {
             'currency' => $this->market_id($symbol),
         ), $params));
         $ticker = $response['stats'];
-        $timestamp = $this->milliseconds ();
+        $last = floatval ($ticker['last_price']);
         return array (
             'symbol' => $symbol,
-            'timestamp' => $timestamp,
-            'datetime' => $this->iso8601 ($timestamp),
+            'timestamp' => null,
+            'datetime' => null,
             'high' => floatval ($ticker['max']),
             'low' => floatval ($ticker['min']),
             'bid' => floatval ($ticker['bid']),
             'ask' => floatval ($ticker['ask']),
             'vwap' => null,
             'open' => floatval ($ticker['open']),
-            'close' => null,
-            'first' => null,
-            'last' => floatval ($ticker['last_price']),
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
             'change' => floatval ($ticker['daily_change']),
             'percentage' => null,
             'average' => null,
@@ -206,6 +206,7 @@ class _1btcxe extends Exchange {
     }
 
     public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $this->load_markets();
         $response = $this->privatePostWithdrawalsNew (array_merge (array (
             'currency' => $currency,
