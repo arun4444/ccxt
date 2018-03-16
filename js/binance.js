@@ -682,17 +682,16 @@ module.exports = class binance extends Exchange {
         if (!symbol)
             throw new ExchangeError (this.id + ' fetchOrder requires a symbol param');
         await this.loadMarkets ();
-        let market = this.market (symbol);
         let origClientOrderId = this.safeValue (params, 'origClientOrderId');
         let request = {
-            'symbol': market['id'],
+            'symbol': symbol,
         };
         if (typeof origClientOrderId !== 'undefined')
             request['origClientOrderId'] = origClientOrderId;
         else
             request['orderId'] = parseInt (id);
         let response = await this.privateGetOrder (this.extend (request, params));
-        return this.parseOrder (response, market);
+        return this.parseOrder (response);
     }
 
     async fetchOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
@@ -819,10 +818,9 @@ module.exports = class binance extends Exchange {
     async withdraw (code, amount, address, tag = undefined, params = {}) {
         this.checkAddress (address);
         await this.loadMarkets ();
-        let currency = this.currency (code);
         let name = address.slice (0, 20);
         let request = {
-            'asset': currency['id'],
+            'asset': code,
             'address': address,
             'amount': parseFloat (amount),
             'name': name,
