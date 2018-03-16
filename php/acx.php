@@ -89,8 +89,8 @@ class acx extends Exchange {
                 ),
             ),
             'exceptions' => array (
-                2002 => '\\ccxt\\InsufficientFunds',
-                2003 => '\\ccxt\\OrderNotFound',
+                '2002' => '\\ccxt\\InsufficientFunds',
+                '2003' => '\\ccxt\\OrderNotFound',
             ),
         ));
     }
@@ -332,6 +332,7 @@ class acx extends Exchange {
     }
 
     public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $this->load_markets();
         $result = $this->privatePostWithdraw (array_merge (array (
             'currency' => strtolower ($currency),

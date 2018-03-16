@@ -93,8 +93,8 @@ class acx (Exchange):
                 },
             },
             'exceptions': {
-                2002: InsufficientFunds,
-                2003: OrderNotFound,
+                '2002': InsufficientFunds,
+                '2003': OrderNotFound,
             },
         })
 
@@ -314,6 +314,7 @@ class acx (Exchange):
         return order
 
     async def withdraw(self, currency, amount, address, tag=None, params={}):
+        self.check_address(address)
         await self.load_markets()
         result = await self.privatePostWithdraw(self.extend({
             'currency': currency.lower(),

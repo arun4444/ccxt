@@ -8,7 +8,6 @@ import math
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
-from ccxt.base.errors import DDoSProtection
 
 
 class bleutrade (bittrex):
@@ -23,7 +22,6 @@ class bleutrade (bittrex):
             'has': {
                 'CORS': True,
                 'fetchTickers': True,
-                'fetchOHLCV': False,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/30303000-b602dbe6-976d-11e7-956d-36c5049c01e7.jpg',
@@ -88,6 +86,11 @@ class bleutrade (bittrex):
                     },
                 },
             },
+            'exceptions': {
+                'Insufficient fundsnot ': InsufficientFunds,
+                'Invalid Order ID': InvalidOrder,
+                'Invalid apikey or apisecret': AuthenticationError,
+            },
         })
 
     def fetch_markets(self):
@@ -146,17 +149,3 @@ class bleutrade (bittrex):
         response = self.publicGetOrderbook(self.extend(request, params))
         orderbook = response['result']
         return self.parse_order_book(orderbook, None, 'buy', 'sell', 'Rate', 'Quantity')
-
-    def throw_exception_on_error(self, response):
-        if 'message' in response:
-            if response['message'] == 'Insufficient fundsnot ':
-                raise InsufficientFunds(self.id + ' ' + self.json(response))
-            if response['message'] == 'MIN_TRADE_REQUIREMENT_NOT_MET':
-                raise InvalidOrder(self.id + ' ' + self.json(response))
-            if response['message'] == 'APIKEY_INVALID':
-                if self.hasAlreadyAuthenticatedSuccessfully:
-                    raise DDoSProtection(self.id + ' ' + self.json(response))
-                else:
-                    raise AuthenticationError(self.id + ' ' + self.json(response))
-            if response['message'] == 'DUST_TRADE_DISALLOWED_MIN_VALUE_50K_SAT':
-                raise InvalidOrder(self.id + ' order cost should be over 50k satoshi ' + self.json(response))

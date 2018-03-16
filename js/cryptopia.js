@@ -81,6 +81,7 @@ module.exports = class cryptopia extends Exchange {
         const currencies = {
             'ACC': 'AdCoin',
             'BAT': 'BatCoin',
+            'BLZ': 'BlazeCoin',
             'CC': 'CCX',
             'CMT': 'Comet',
             'FCN': 'Facilecoin',
@@ -99,6 +100,7 @@ module.exports = class cryptopia extends Exchange {
         const currencies = {
             'AdCoin': 'ACC',
             'BatCoin': 'BAT',
+            'BlazeCoin': 'BLZ',
             'CCX': 'CC',
             'Comet': 'CMT',
             'Cubits': 'QBT',
@@ -242,6 +244,16 @@ module.exports = class cryptopia extends Exchange {
         let symbol = undefined;
         if (market)
             symbol = market['symbol'];
+        let open = this.safeFloat (ticker, 'Open');
+        let last = this.safeFloat (ticker, 'LastPrice');
+        let change = last - open;
+        let baseVolume = this.safeFloat (ticker, 'Volume');
+        let quoteVolume = this.safeFloat (ticker, 'BaseVolume');
+        let vwap = undefined;
+        if (typeof quoteVolume !== 'undefined')
+            if (typeof baseVolume !== 'undefined')
+                if (baseVolume > 0)
+                    vwap = quoteVolume / baseVolume;
         return {
             'symbol': symbol,
             'info': ticker,
@@ -251,16 +263,16 @@ module.exports = class cryptopia extends Exchange {
             'low': parseFloat (ticker['Low']),
             'bid': parseFloat (ticker['BidPrice']),
             'ask': parseFloat (ticker['AskPrice']),
-            'vwap': undefined,
-            'open': parseFloat (ticker['Open']),
-            'close': parseFloat (ticker['Close']),
-            'first': undefined,
-            'last': parseFloat (ticker['LastPrice']),
-            'change': parseFloat (ticker['Change']),
-            'percentage': undefined,
-            'average': undefined,
-            'baseVolume': parseFloat (ticker['Volume']),
-            'quoteVolume': parseFloat (ticker['BaseVolume']),
+            'vwap': vwap,
+            'open': open,
+            'close': last,
+            'last': last,
+            'previousClose': undefined,
+            'change': change,
+            'percentage': parseFloat (ticker['Change']),
+            'average': this.sum (last, open) / 2,
+            'baseVolume': baseVolume,
+            'quoteVolume': quoteVolume,
         };
     }
 
@@ -289,7 +301,7 @@ module.exports = class cryptopia extends Exchange {
             let symbol = market['symbol'];
             result[symbol] = this.parseTicker (ticker, market);
         }
-        return result;
+        return this.filterByArray (result, 'symbol', symbols);
     }
 
     parseTrade (trade, market = undefined) {
@@ -343,7 +355,7 @@ module.exports = class cryptopia extends Exchange {
         if (typeof since !== 'undefined') {
             let elapsed = this.milliseconds () - since;
             let hour = 1000 * 60 * 60;
-            hours = parseInt (elapsed / hour);
+            hours = parseInt (Math.ceil (elapsed / hour));
         }
         let request = {
             'id': market['id'],
@@ -626,7 +638,10 @@ module.exports = class cryptopia extends Exchange {
         let response = await this.privatePostGetDepositAddress (this.extend ({
             'Currency': currency,
         }, params));
-        const address = this.safeString (response['Data'], 'Address');
+        let address = this.safeString (response['Data'], 'BaseAddress');
+        if (!address)
+            address = this.safeString (response['Data'], 'Address');
+        this.checkAddress (address);
         return {
             'currency': currency,
             'tag' : response['Data']['BaseAddress'],
@@ -637,6 +652,7 @@ module.exports = class cryptopia extends Exchange {
     }
 
     async withdraw (currency, amount, address, tag = undefined, params = {}) {
+        this.checkAddress (address);
         let currencyId = this.currencyId (currency);
         let request = {
             'Currency': currencyId,

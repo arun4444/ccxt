@@ -366,9 +366,13 @@ class bitfinex (Exchange):
 
     async def fetch_order_book(self, symbol, limit=None, params={}):
         await self.load_markets()
-        orderbook = await self.publicGetBookSymbol(self.extend({
+        request = {
             'symbol': self.market_id(symbol),
-        }, params))
+        }
+        if limit is not None:
+            request['limit_bids'] = limit
+            request['limit_asks'] = limit
+        orderbook = await self.publicGetBookSymbol(self.extend(request, params))
         return self.parse_order_book(orderbook, None, 'bids', 'asks', 'price', 'amount')
 
     async def fetch_tickers(self, symbols=None, params={}):
@@ -462,12 +466,16 @@ class bitfinex (Exchange):
             'fee': fee,
         }
 
-    async def fetch_trades(self, symbol, since=None, limit=None, params={}):
+    async def fetch_trades(self, symbol, since=None, limit=50, params={}):
         await self.load_markets()
         market = self.market(symbol)
-        response = await self.publicGetTradesSymbol(self.extend({
+        request = {
             'symbol': market['id'],
-        }, params))
+            'limit_trades': limit,
+        }
+        if since is not None:
+            request['timestamp'] = int(since / 1000)
+        response = await self.publicGetTradesSymbol(self.extend(request, params))
         return self.parse_trades(response, market, since, limit)
 
     async def fetch_my_trades(self, symbol=None, since=None, limit=None, params={}):
@@ -541,10 +549,10 @@ class bitfinex (Exchange):
             'type': orderType,
             'side': side,
             'price': self.safe_float(order, 'price'),
-            'average': float(order['avg_execution_price']),
-            'amount': float(order['original_amount']),
-            'remaining': float(order['remaining_amount']),
-            'filled': float(order['executed_amount']),
+            'average': self.safe_float(order, 'avg_execution_price'),
+            'amount': self.safe_float(order, 'original_amount'),
+            'remaining': self.safe_float(order, 'remaining_amount'),
+            'filled': self.safe_float(order, 'executed_amount'),
             'status': status,
             'fee': None,
         }
@@ -587,7 +595,7 @@ class bitfinex (Exchange):
             ohlcv[5],
         ]
 
-    async def fetch_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
+    async def fetch_ohlcv(self, symbol, timeframe='1m', since=None, limit=100, params={}):
         await self.load_markets()
         market = self.market(symbol)
         v2id = 't' + market['id']
@@ -595,9 +603,8 @@ class bitfinex (Exchange):
             'symbol': v2id,
             'timeframe': self.timeframes[timeframe],
             'sort': 1,
+            'limit': limit,
         }
-        if limit is not None:
-            request['limit'] = limit
         if since is not None:
             request['start'] = since
         request = self.extend(request, params)
@@ -632,9 +639,11 @@ class bitfinex (Exchange):
         response = await self.fetch_deposit_address(currency, self.extend({
             'renew': 1,
         }, params))
+        address = self.safe_string(response, 'address')
+        self.check_address(address)
         return {
             'currency': currency,
-            'address': response['address'],
+            'address': address,
             'status': 'ok',
             'info': response['info'],
         }
@@ -652,6 +661,7 @@ class bitfinex (Exchange):
         if 'address_pool' in response:
             tag = address
             address = response['address_pool']
+        self.check_address(address)
         return {
             'currency': currency,
             'address': address,
@@ -661,6 +671,7 @@ class bitfinex (Exchange):
         }
 
     async def withdraw(self, currency, amount, address, tag=None, params={}):
+        self.check_address(address)
         name = self.get_currency_name(currency)
         request = {
             'withdraw_type': name,

@@ -12,11 +12,17 @@ class exmo extends Exchange {
             'id' => 'exmo',
             'name' => 'EXMO',
             'countries' => array ( 'ES', 'RU' ), // Spain, Russia
-            'rateLimit' => 1000, // once every 350 ms ≈ 180 requests per minute ≈ 3 requests per second
+            'rateLimit' => 350, // once every 350 ms ≈ 180 requests per minute ≈ 3 requests per second
             'version' => 'v1',
             'has' => array (
                 'CORS' => false,
+                'fetchClosedOrders' => 'emulated',
+                'fetchOpenOrders' => true,
+                'fetchOrder' => 'emulated',
+                'fetchOrders' => 'emulated',
+                'fetchOrderTrades' => true,
                 'fetchOrderBooks' => true,
+                'fetchMyTrades' => true,
                 'fetchTickers' => true,
                 'withdraw' => true,
             ),
@@ -105,16 +111,16 @@ class exmo extends Exchange {
                 'quote' => $quote,
                 'limits' => array (
                     'amount' => array (
-                        'min' => $market['min_quantity'],
-                        'max' => $market['max_quantity'],
+                        'min' => $this->safe_float($market, 'min_quantity'),
+                        'max' => $this->safe_float($market, 'max_quantity'),
                     ),
                     'price' => array (
-                        'min' => $market['min_price'],
-                        'max' => $market['max_price'],
+                        'min' => $this->safe_float($market, 'min_price'),
+                        'max' => $this->safe_float($market, 'max_price'),
                     ),
                     'cost' => array (
-                        'min' => $market['min_amount'],
-                        'max' => $market['max_amount'],
+                        'min' => $this->safe_float($market, 'min_amount'),
+                        'max' => $this->safe_float($market, 'max_amount'),
                     ),
                 ),
                 'precision' => array (
@@ -148,9 +154,12 @@ class exmo extends Exchange {
     public function fetch_order_book ($symbol, $limit = null, $params = array ()) {
         $this->load_markets();
         $market = $this->market ($symbol);
-        $response = $this->publicGetOrderBook (array_merge (array (
+        $request = array_merge (array (
             'pair' => $market['id'],
-        ), $params));
+        ), $params);
+        if ($limit !== null)
+            $request['limit'] = $limit;
+        $response = $this->publicGetOrderBook ($request);
         $result = $response[$market['id']];
         $orderbook = $this->parse_order_book($result, null, 'bid', 'ask');
         return array_merge ($orderbook, array (
@@ -180,11 +189,7 @@ class exmo extends Exchange {
         $ids = is_array ($response) ? array_keys ($response) : array ();
         for ($i = 0; $i < count ($ids); $i++) {
             $id = $ids[$i];
-            $symbol = $id;
-            if (is_array ($this->markets_by_id) && array_key_exists ($id, $this->markets_by_id)) {
-                $market = $this->markets_by_id[$id];
-                $symbol = $market['symbol'];
-            }
+            $symbol = $this->find_symbol($id);
             $result[$symbol] = $this->parse_order_book($response[$id], null, 'bid', 'ask');
         }
         return $result;
@@ -195,6 +200,7 @@ class exmo extends Exchange {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $last = floatval ($ticker['last_trade']);
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -205,9 +211,9 @@ class exmo extends Exchange {
             'ask' => floatval ($ticker['sell_price']),
             'vwap' => null,
             'open' => null,
-            'close' => null,
-            'first' => null,
-            'last' => floatval ($ticker['last_trade']),
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
             'change' => null,
             'percentage' => null,
             'average' => floatval ($ticker['avg']),
@@ -247,11 +253,12 @@ class exmo extends Exchange {
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601 ($timestamp),
             'symbol' => $market['symbol'],
-            'order' => null,
+            'order' => $this->safe_string($trade, 'order_id'),
             'type' => null,
             'side' => $trade['type'],
             'price' => floatval ($trade['price']),
             'amount' => floatval ($trade['quantity']),
+            'cost' => $this->safe_float($trade, 'amount'),
         );
     }
 
@@ -264,29 +271,276 @@ class exmo extends Exchange {
         return $this->parse_trades($response[$market['id']], $market, $since, $limit);
     }
 
+    public function fetch_my_trades ($symbol = null, $since = null, $limit = null, $params = array ()) {
+        $this->load_markets();
+        $request = array ();
+        $market = null;
+        if ($symbol !== null) {
+            $market = $this->market ($symbol);
+            $request['pair'] = $market['id'];
+        }
+        $response = $this->privatePostUserTrades (array_merge ($request, $params));
+        if ($market !== null)
+            $response = $response[$market['id']];
+        return $this->parse_trades($response, $market, $since, $limit);
+    }
+
     public function create_order ($symbol, $type, $side, $amount, $price = null, $params = array ()) {
         $this->load_markets();
-        $prefix = '';
-        if ($type === 'market')
-            $prefix = 'market_';
-        if ($price === null)
-            $price = 0;
-        $order = array (
-            'pair' => $this->market_id($symbol),
-            'quantity' => $amount,
-            'price' => $price,
+        $prefix = ($type === 'market') ? 'market_' : '';
+        $market = $this->market ($symbol);
+        $request = array (
+            'pair' => $market['id'],
+            'quantity' => $this->amount_to_string($symbol, $amount),
+            'price' => $this->price_to_precision($symbol, $price),
             'type' => $prefix . $side,
         );
-        $response = $this->privatePostOrderCreate (array_merge ($order, $params));
-        return array (
-            'info' => $response,
-            'id' => (string) $response['order_id'],
+        // var_dump ($request);
+        // exit ()
+        $response = $this->privatePostOrderCreate (array_merge ($request, $params));
+        $id = $this->safe_string($response, 'order_id');
+        $timestamp = $this->milliseconds ();
+        $price = floatval ($price);
+        $amount = floatval ($amount);
+        $status = 'open';
+        $order = array (
+            'id' => $id,
+            'timestamp' => $timestamp,
+            'datetime' => $this->iso8601 ($timestamp),
+            'status' => $status,
+            'symbol' => $symbol,
+            'type' => $type,
+            'side' => $side,
+            'price' => $price,
+            'cost' => $price * $amount,
+            'amount' => $amount,
+            'remaining' => $amount,
+            'filled' => 0.0,
+            'fee' => null,
+            'trades' => null,
         );
+        $this->orders[$id] = $order;
+        return array_merge (array ( 'info' => $response ), $order);
     }
 
     public function cancel_order ($id, $symbol = null, $params = array ()) {
         $this->load_markets();
-        return $this->privatePostOrderCancel (array ( 'order_id' => $id ));
+        $response = $this->privatePostOrderCancel (array ( 'order_id' => $id ));
+        if (is_array ($this->orders) && array_key_exists ($id, $this->orders))
+            $this->orders[$id]['status'] = 'canceled';
+        return $response;
+    }
+
+    public function fetch_order ($id, $symbol = null, $params = array ()) {
+        $this->load_markets();
+        $this->fetch_orders($symbol, null, null, $params);
+        if (is_array ($this->orders) && array_key_exists ($id, $this->orders))
+            return $this->orders[$id];
+        throw new OrderNotFound ($this->id . ' order $id ' . (string) $id . ' is not in "open" state and not found in cache');
+    }
+
+    public function fetch_order_trades ($id, $symbol = null, $since = null, $limit = null, $params = array ()) {
+        $order = $this->fetch_order($id, $symbol, $params);
+        // todo => filter by $symbol, $since and $limit
+        return $order['trades'];
+    }
+
+    public function update_cached_orders ($openOrders, $symbol) {
+        // update local cache with open orders
+        for ($j = 0; $j < count ($openOrders); $j++) {
+            $id = $openOrders[$j]['id'];
+            $this->orders[$id] = $openOrders[$j];
+        }
+        $openOrdersIndexedById = $this->index_by($openOrders, 'id');
+        $cachedOrderIds = is_array ($this->orders) ? array_keys ($this->orders) : array ();
+        $result = array ();
+        for ($k = 0; $k < count ($cachedOrderIds); $k++) {
+            // match each cached $order to an $order in the open orders array
+            // possible reasons why a cached $order may be missing in the open orders array:
+            // - $order was closed or canceled -> update cache
+            // - $symbol mismatch (e.g. cached BTC/USDT, fetched ETH/USDT) -> skip
+            $id = $cachedOrderIds[$k];
+            $order = $this->orders[$id];
+            $result[] = $order;
+            if (!(is_array ($openOrdersIndexedById) && array_key_exists ($id, $openOrdersIndexedById))) {
+                // cached $order is not in open orders array
+                // if we fetched orders by $symbol and it doesn't match the cached $order -> won't update the cached $order
+                if ($symbol !== null && $symbol !== $order['symbol'])
+                    continue;
+                // $order is cached but not present in the list of open orders -> mark the cached $order as closed
+                if ($order['status'] === 'open') {
+                    $order = array_merge ($order, array (
+                        'status' => 'closed', // likewise it might have been canceled externally (unnoticed by "us")
+                        'cost' => null,
+                        'filled' => $order['amount'],
+                        'remaining' => 0.0,
+                    ));
+                    if ($order['cost'] == null) {
+                        if ($order['filled'] != null)
+                            $order['cost'] = $order['filled'] * $order['price'];
+                    }
+                    $this->orders[$id] = $order;
+                }
+            }
+        }
+        return $result;
+    }
+
+    public function fetch_orders ($symbol = null, $since = null, $limit = null, $params = array ()) {
+        $this->load_markets();
+        $response = $this->privatePostUserOpenOrders ($params);
+        $marketIds = is_array ($response) ? array_keys ($response) : array ();
+        for ($i = 0; $i < count ($marketIds); $i++) {
+            $marketId = $marketIds[$i];
+            $market = null;
+            $marketSymbol = null;
+            if (is_array ($this->markets_by_id) && array_key_exists ($marketId, $this->markets_by_id)) {
+                $market = $this->markets_by_id[$marketId];
+                $marketSymbol = $market['symbol'];
+            }
+            $orders = $this->parse_orders($response[$marketId], $market);
+            $this->update_cached_orders ($orders, $marketSymbol);
+        }
+        return $this->filter_by_symbol_since_limit($this->orders, $symbol, $since, $limit);
+    }
+
+    public function fetch_open_orders ($symbol = null, $since = null, $limit = null, $params = array ()) {
+        $this->fetch_orders($symbol, $since, $limit, $params);
+        $orders = $this->filter_by($this->orders, 'status', 'open');
+        return $this->filter_by_symbol_since_limit($orders, $symbol, $since, $limit);
+    }
+
+    public function fetch_closed_orders ($symbol = null, $since = null, $limit = null, $params = array ()) {
+        $this->fetch_orders($symbol, $since, $limit, $params);
+        $orders = $this->filter_by($this->orders, 'status', 'closed');
+        return $this->filter_by_symbol_since_limit($orders, $symbol, $since, $limit);
+    }
+
+    public function parse_order ($order, $market = null) {
+        $id = $this->safe_string($order, 'order_id');
+        $timestamp = $this->safe_integer($order, 'created');
+        if ($timestamp !== null)
+            $timestamp *= 1000;
+        $iso8601 = null;
+        $symbol = null;
+        $side = $this->safe_string($order, 'type');
+        if ($market === null) {
+            $marketId = null;
+            if (is_array ($order) && array_key_exists ('pair', $order)) {
+                $marketId = $order['pair'];
+            } else if ((is_array ($order) && array_key_exists ('in_currency', $order)) && (is_array ($order) && array_key_exists ('out_currency', $order))) {
+                if ($side === 'buy')
+                    $marketId = $order['in_currency'] . '_' . $order['out_currency'];
+                else
+                    $marketId = $order['out_currency'] . '_' . $order['in_currency'];
+            }
+            if (($marketId !== null) && (is_array ($this->markets_by_id) && array_key_exists ($marketId, $this->markets_by_id)))
+                $market = $this->markets_by_id[$marketId];
+        }
+        $amount = $this->safe_float($order, 'quantity');
+        if ($amount === null) {
+            $amountField = ($side === 'buy') ? 'in_amount' : 'out_amount';
+            $amount = $this->safe_float($order, $amountField);
+        }
+        $price = $this->safe_float($order, 'price');
+        $cost = $this->safe_float($order, 'amount');
+        $filled = 0.0;
+        $trades = array ();
+        $transactions = $this->safe_value($order, 'trades');
+        $feeCost = null;
+        if ($transactions !== null) {
+            if (gettype ($transactions) === 'array' && count (array_filter (array_keys ($transactions), 'is_string')) == 0) {
+                for ($i = 0; $i < count ($transactions); $i++) {
+                    $trade = $this->parse_trade($transactions[$i], $market);
+                    if ($id === null)
+                        $id = $trade['order'];
+                    if ($timestamp === null)
+                        $timestamp = $trade['timestamp'];
+                    if ($timestamp > $trade['timestamp'])
+                        $timestamp = $trade['timestamp'];
+                    $filled .= $trade['amount'];
+                    if ($feeCost === null)
+                        $feeCost = 0.0;
+                    // $feeCost .= $trade['fee']['cost'];
+                    if ($cost === null)
+                        $cost = 0.0;
+                    $cost .= $trade['cost'];
+                    $trades[] = $trade;
+                }
+            }
+        }
+        if ($timestamp !== null)
+            $iso8601 = $this->iso8601 ($timestamp);
+        $remaining = null;
+        if ($amount !== null)
+            $remaining = $amount - $filled;
+        $status = $this->safe_string($order, 'status'); // in case we need to redefine it for canceled orders
+        if ($filled >= $amount)
+            $status = 'closed';
+        else
+            $status = 'open';
+        if ($market === null)
+            $market = $this->get_market_from_trades ($trades);
+        $feeCurrency = null;
+        if ($market !== null) {
+            $symbol = $market['symbol'];
+            $feeCurrency = $market['quote'];
+        }
+        if ($cost === null) {
+            if ($price !== null)
+                $cost = $price * $filled;
+        } else if ($price === null) {
+            if ($filled > 0)
+                $price = $cost / $filled;
+        }
+        $fee = array (
+            'cost' => $feeCost,
+            'currency' => $feeCurrency,
+        );
+        return array (
+            'id' => $id,
+            'datetime' => $iso8601,
+            'timestamp' => $timestamp,
+            'status' => $status,
+            'symbol' => $symbol,
+            'type' => null,
+            'side' => $side,
+            'price' => $price,
+            'cost' => $cost,
+            'amount' => $amount,
+            'filled' => $filled,
+            'remaining' => $remaining,
+            'trades' => $trades,
+            'fee' => $fee,
+            'info' => $order,
+        );
+    }
+
+    public function get_market_from_trades ($trades) {
+        $tradesBySymbol = $this->index_by($trades, 'pair');
+        $symbols = is_array ($tradesBySymbol) ? array_keys ($tradesBySymbol) : array ();
+        $numSymbols = is_array ($symbols) ? count ($symbols) : 0;
+        if ($numSymbols === 1)
+            return $this->markets[$symbols[0]];
+        return null;
+    }
+
+    public function calculate_fee ($symbol, $type, $side, $amount, $price, $takerOrMaker = 'taker', $params = array ()) {
+        $market = $this->markets[$symbol];
+        $rate = $market[$takerOrMaker];
+        $cost = floatval ($this->cost_to_precision($symbol, $amount * $rate));
+        $key = 'quote';
+        if ($side === 'sell') {
+            $cost *= $price;
+        } else {
+            $key = 'base';
+        }
+        return array (
+            'type' => $takerOrMaker,
+            'currency' => $market[$key],
+            'rate' => $rate,
+            'cost' => floatval ($this->fee_to_precision($symbol, $cost)),
+        );
     }
 
     public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
@@ -321,6 +575,10 @@ class exmo extends Exchange {
             );
         }
         return array ( 'url' => $url, 'method' => $method, 'body' => $body, 'headers' => $headers );
+    }
+
+    public function nonce () {
+        return $this->milliseconds ();
     }
 
     public function request ($path, $api = 'public', $method = 'GET', $params = array (), $headers = null, $body = null) {

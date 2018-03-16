@@ -86,6 +86,7 @@ class cryptopia (Exchange):
         currencies = {
             'ACC': 'AdCoin',
             'BAT': 'BatCoin',
+            'BLZ': 'BlazeCoin',
             'CC': 'CCX',
             'CMT': 'Comet',
             'FCN': 'Facilecoin',
@@ -103,6 +104,7 @@ class cryptopia (Exchange):
         currencies = {
             'AdCoin': 'ACC',
             'BatCoin': 'BAT',
+            'BlazeCoin': 'BLZ',
             'CCX': 'CC',
             'Comet': 'CMT',
             'Cubits': 'QBT',
@@ -210,6 +212,16 @@ class cryptopia (Exchange):
         symbol = None
         if market:
             symbol = market['symbol']
+        open = self.safe_float(ticker, 'Open')
+        last = self.safe_float(ticker, 'LastPrice')
+        change = last - open
+        baseVolume = self.safe_float(ticker, 'Volume')
+        quoteVolume = self.safe_float(ticker, 'BaseVolume')
+        vwap = None
+        if quoteVolume is not None:
+            if baseVolume is not None:
+                if baseVolume > 0:
+                    vwap = quoteVolume / baseVolume
         return {
             'symbol': symbol,
             'info': ticker,
@@ -219,16 +231,16 @@ class cryptopia (Exchange):
             'low': float(ticker['Low']),
             'bid': float(ticker['BidPrice']),
             'ask': float(ticker['AskPrice']),
-            'vwap': None,
-            'open': float(ticker['Open']),
-            'close': float(ticker['Close']),
-            'first': None,
-            'last': float(ticker['LastPrice']),
-            'change': float(ticker['Change']),
-            'percentage': None,
-            'average': None,
-            'baseVolume': float(ticker['Volume']),
-            'quoteVolume': float(ticker['BaseVolume']),
+            'vwap': vwap,
+            'open': open,
+            'close': last,
+            'last': last,
+            'previousClose': None,
+            'change': change,
+            'percentage': float(ticker['Change']),
+            'average': self.sum(last, open) / 2,
+            'baseVolume': baseVolume,
+            'quoteVolume': quoteVolume,
         }
 
     def fetch_ticker(self, symbol, params={}):
@@ -254,7 +266,7 @@ class cryptopia (Exchange):
             market = self.markets_by_id[id]
             symbol = market['symbol']
             result[symbol] = self.parse_ticker(ticker, market)
-        return result
+        return self.filter_by_array(result, 'symbol', symbols)
 
     def parse_trade(self, trade, market=None):
         timestamp = None
@@ -302,7 +314,7 @@ class cryptopia (Exchange):
         if since is not None:
             elapsed = self.milliseconds() - since
             hour = 1000 * 60 * 60
-            hours = int(elapsed / hour)
+            hours = int(int(math.ceil(elapsed / hour)))
         request = {
             'id': market['id'],
             'hours': hours,
@@ -554,6 +566,7 @@ class cryptopia (Exchange):
         address = self.safe_string(response['Data'], 'BaseAddress')
         if not address:
             address = self.safe_string(response['Data'], 'Address')
+        self.check_address(address)
         return {
             'currency': currency,
             'address': address,
@@ -562,6 +575,7 @@ class cryptopia (Exchange):
         }
 
     def withdraw(self, currency, amount, address, tag=None, params={}):
+        self.check_address(address)
         currencyId = self.currency_id(currency)
         request = {
             'Currency': currencyId,
