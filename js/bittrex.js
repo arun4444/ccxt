@@ -478,12 +478,11 @@ module.exports = class bittrex extends Exchange {
         if (type !== 'limit')
             throw new ExchangeError (this.id + ' allows limit orders only');
         await this.loadMarkets ();
-        let market = this.market (symbol);
         let method = 'marketGet' + this.capitalize (side) + type;
         let order = {
-            'market': market['id'],
-            'quantity': this.amountToPrecision (symbol, amount),
-            'rate': this.priceToPrecision (symbol, price),
+            'market': symbol,
+            'quantity': amount,
+            'rate': price,
         };
         // if (type == 'limit')
         //     order['rate'] = this.priceToPrecision (symbol, price);
@@ -685,7 +684,7 @@ module.exports = class bittrex extends Exchange {
         this.checkAddress (address);
         let currencyId = this.currencyId (currency);
         let request = {
-            'currency': currencyId,
+            'currency': currency,
             'quantity': amount,
             'address': address,
         };
