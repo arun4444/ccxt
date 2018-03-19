@@ -621,47 +621,34 @@ module.exports = class binance extends Exchange {
         return (status in statuses) ? statuses[status] : status.toLowerCase ();
     }
 
-    parseOrder (order, market = undefined) {
-        let status = this.safeValue (order, 'status');
-        if (typeof status !== 'undefined')
-            status = this.parseOrderStatus (status);
-        let symbol = this.findSymbol (this.safeString (order, 'symbol'), market);
-        let timestamp = undefined;
-        if ('time' in order)
-            timestamp = order['time'];
-        else if ('transactTime' in order)
-            timestamp = order['transactTime'];
-        else
-            throw new ExchangeError (this.id + ' malformed order: ' + this.json (order));
-        let price = parseFloat (order['price']);
-        let amount = parseFloat (order['origQty']);
-        let filled = this.safeFloat (order, 'executedQty', 0.0);
-        let remaining = Math.max (amount - filled, 0.0);
-        let cost = undefined;
-        if (typeof price !== 'undefined')
-            if (typeof filled !== 'undefined')
-                cost = price * filled;
+    parseNewOrder (order) {
+        let orderId = order["orderId"]
         let result = {
+            'orderId': orderId,
             'info': order,
-            'id': order['orderId'].toString (),
-            'timestamp': timestamp,
-            'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
-            'type': order['type'].toLowerCase (),
-            'side': order['side'].toLowerCase (),
-            'price': price,
-            'amount': amount,
-            'cost': cost,
-            'filled': filled,
-            'remaining': remaining,
+        };
+        return result;
+    }
+
+    parseOrder (order) {
+        let status = this.safeValue (order, 'status');
+        if (typeof status !== 'undefined'){
+            status = this.parseOrderStatus (status);
+        } else {
+            throw new ExchangeError (this.id + ' malformed order: ' + this.json (order));
+        }                
+        let filled = this.safeFloat (order, 'executedQty', 0.0);
+        let orderId = order["orderId"]
+        let result = {
+            'orderId': orderId,
             'status': status,
-            'fee': undefined,
+            'amtFilled': filled,
+            'info': order,
         };
         return result;
     }
 
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
-        await this.loadMarkets ();
         let order = {
             'symbol': symbol,
             'quantity': amount,
@@ -675,21 +662,16 @@ module.exports = class binance extends Exchange {
             });
         }
         let response = await this.privatePostOrder (this.extend (order, params));
-        return this.parseOrder (response);
+        return this.parseNewOrder (response);
     }
 
     async fetchOrder (id, symbol = undefined, params = {}) {
         if (!symbol)
             throw new ExchangeError (this.id + ' fetchOrder requires a symbol param');
-        await this.loadMarkets ();
-        let origClientOrderId = this.safeValue (params, 'origClientOrderId');
         let request = {
             'symbol': symbol,
+            'orderId' : id,
         };
-        if (typeof origClientOrderId !== 'undefined')
-            request['origClientOrderId'] = origClientOrderId;
-        else
-            request['orderId'] = parseInt (id);
         let response = await this.privateGetOrder (this.extend (request, params));
         return this.parseOrder (response);
     }
@@ -733,14 +715,15 @@ module.exports = class binance extends Exchange {
     async cancelOrder (id, symbol = undefined, params = {}) {
         if (!symbol)
             throw new ExchangeError (this.id + ' cancelOrder requires a symbol argument');
-        await this.loadMarkets ();
-        let market = this.market (symbol);
         let response = await this.privateDeleteOrder (this.extend ({
-            'symbol': market['id'],
-            'orderId': parseInt (id),
-            // 'origClientOrderId': id,
+            'symbol': symbol,
+            'orderId': id,
         }, params));
-        return response;
+        if(response.orderId === id){
+            return {success: true}
+        } else {
+            throw new ExchangeError (id + ' cancelling order failed: ' + response);
+        }
     }
 
     async fetchMyTrades (symbol = undefined, since = undefined, limit = undefined, params = {}) {
@@ -817,7 +800,6 @@ module.exports = class binance extends Exchange {
 
     async withdraw (code, amount, address, tag = undefined, params = {}) {
         this.checkAddress (address);
-        await this.loadMarkets ();
         let name = address.slice (0, 20);
         let request = {
             'asset': code,
