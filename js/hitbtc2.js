@@ -867,7 +867,6 @@ module.exports = class hitbtc2 extends hitbtc {
 
     async createOrder(symbol, type, side, amount, price = undefined, params = {}) {
         await this.loadMarkets();
-        let market = this.market(symbol);
         // their max accepted length is 32 characters
         let uuid = this.uuid();
         let parts = uuid.split('-');
@@ -876,13 +875,13 @@ module.exports = class hitbtc2 extends hitbtc {
         amount = parseFloat(amount);
         let request = {
             'clientOrderId': clientOrderId,
-            'symbol': market['id'],
+            'symbol': symbol,
             'side': side,
-            'quantity': this.amountToPrecision(symbol, amount),
+            'quantity': amount,
             'type': type,
         };
         if (type === 'limit') {
-            request['price'] = this.priceToPrecision(symbol, price);
+            request['price'] = price;
         } else {
             request['timeInForce'] = 'FOK';
         }
@@ -1105,9 +1104,8 @@ module.exports = class hitbtc2 extends hitbtc {
 
     async withdraw (code, amount, address, tag = undefined, params = {}) {
         this.checkAddress (address);
-        let currency = this.currency (code);
         let request = {
-            'currency': currency['id'],
+            'currency': code,
             'amount': parseFloat(amount),
             'address': address,
         };

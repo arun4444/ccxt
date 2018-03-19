@@ -224,7 +224,7 @@ module.exports = class gemini extends Exchange {
         let nonce = this.nonce ();
         let order = {
             'client_order_id': nonce.toString (),
-            'symbol': this.marketId (symbol),
+            'symbol': symbol,
             'amount': amount.toString (),
             'price': price.toString (),
             'side': side,
@@ -235,6 +235,35 @@ module.exports = class gemini extends Exchange {
             'info': response,
             'id': response['order_id'],
         };
+    }
+
+    async fetchOrder (order_id, symbol, params = {}) {
+        let nonce = this.nonce ();
+        let ord = {
+            'order_id':order_id,
+            'nonce': nonce,
+        };
+        let order = await this.privatePostOrderStatus (this.extend (ord, params));
+        let status = 'open'
+        if(!order['is_live']){
+            status = 'closed'
+        }
+        return {
+            'id': order['order_id'],
+            'info': order,
+            'timestamp': order['timestampms'],
+            'datetime': this.iso8601 (order['timestampms']),
+            'status': status,
+            'symbol': symbol,
+            'type': 'limit',
+            'side': order['side'],
+            'price': order['price'],
+            'cost': order['avg_execution_price'],
+            'amount': order['original_amount'],
+            'filled': order['executed_amount'],
+            'remaining': order['remaining_amount'],
+            'fee': undefined,
+        }
     }
 
     async cancelOrder (id, symbol = undefined, params = {}) {
@@ -259,9 +288,8 @@ module.exports = class gemini extends Exchange {
     async withdraw (code, amount, address, tag = undefined, params = {}) {
         this.checkAddress (address);
         await this.loadMarkets ();
-        let currency = this.currency (code);
         let response = await this.privatePostWithdrawCurrency (this.extend ({
-            'currency': currency['id'],
+            'currency': code,
             'amount': amount,
             'address': address,
         }, params));

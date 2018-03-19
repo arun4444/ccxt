@@ -452,14 +452,10 @@ module.exports = class cryptopia extends Exchange {
         if (type === 'market')
             throw new ExchangeError (this.id + ' allows limit orders only');
         await this.loadMarkets ();
-        let market = this.market (symbol);
-        // price = parseFloat (price);
-        // amount = parseFloat (amount);
+        const symbMod = symbol.replace("_","/")
         let request = {
-            'TradePairId': market['id'],
+            'Market': symbMod,
             'Type': this.capitalize (side),
-            // 'Rate': this.priceToPrecision (symbol, price),
-            // 'Amount': this.amountToPrecision (symbol, amount),
             'Rate': price,
             'Amount': amount,
         };
@@ -468,10 +464,13 @@ module.exports = class cryptopia extends Exchange {
             throw new ExchangeError (this.id + ' createOrder returned unknown error: ' + this.json (response));
         let id = undefined;
         let filled = 0.0;
+        let status = 'open'
         if ('Data' in response) {
             if ('OrderId' in response['Data']) {
                 if (response['Data']['OrderId']) {
                     id = response['Data']['OrderId'].toString ();
+                } else {
+                    status = 'closed'
                 }
             }
             if ('FilledOrders' in response['Data']) {
@@ -480,6 +479,13 @@ module.exports = class cryptopia extends Exchange {
                 if (filledOrdersLength) {
                     filled = undefined;
                 }
+                if(filledOrders.length > 0){
+                    if (filledOrders.length === 1){
+                        id = filledOrders[0]
+                    } else {
+                        id = filledOrders
+                    }
+                }
             }
         }
         let timestamp = this.milliseconds ();
@@ -487,20 +493,8 @@ module.exports = class cryptopia extends Exchange {
             'id': id,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
-            'status': 'open',
-            'symbol': symbol,
-            'type': type,
-            'side': side,
-            'price': price,
-            'cost': price * amount,
-            'amount': amount,
-            'remaining': amount,
-            'filled': filled,
-            'fee': undefined,
-            // 'trades': this.parseTrades (order['trades'], market),
+            'status': status,
         };
-        if (id)
-            this.orders[id] = order;
         return this.extend ({ 'info': response }, order);
     }
 
@@ -604,14 +598,57 @@ module.exports = class cryptopia extends Exchange {
         return this.filterBySinceLimit (result, since, limit);
     }
 
-    async fetchOrder (id, symbol = undefined, params = {}) {
-        id = id.toString ();
-        let orders = await this.fetchOrders (symbol, undefined, undefined, params);
-        for (let i = 0; i < orders.length; i++) {
-            if (orders[i]['id'] === id)
-                return orders[i];
+    async fetchOrder (id, symbol, params = {}) {
+        const symbMod = symbol.replace("_","/")        
+        const response = await this.privatePostGetOpenOrders ({
+            'Market': symbMod
+        }, params)
+        for (let i = 0; i < response['Data'].length; i++) {
+            const element = response['Data'][i]
+            if(element.OrderId === id){
+                return {
+                    'id': element.OrderId,
+                    'info': response,
+                    'timestamp': element.TimeStamp,
+                    'datetime': this.iso8601 (element.TimeStamp),
+                    'status': 'open',
+                    'symbol': symbol,
+                    'type': 'limit',
+                    'side': element.Type,
+                    'price': element.Rate,
+                    'cost': element.Total,
+                    'amount': element.Amount,
+                    'filled': element.Amount - element.Remaining,
+                    'remaining': element.Remaining,
+                    'fee': undefined,
+                };
+            }
         }
-        throw new OrderNotCached (this.id + ' order ' + id + ' not found in cached .orders, fetchOrder requires .orders (de)serialization implemented for this method to work properly');
+        const responseHistory = await this.privatePostGetTradeHistory ({
+            'Market': symbMod 
+        }, params)
+        for (let i = 0; i < responseHistory['Data'].length; i++) {
+            const element = responseHistory['Data'][i]
+            if(element.TradeId === id){
+                return {
+                    'id': element.TradeId,
+                    'info': responseHistory,
+                    'timestamp': element.TimeStamp,
+                    'datetime': this.iso8601 (element.TimeStamp),
+                    'status': 'closed',
+                    'symbol': symbol,
+                    'type': 'limit',
+                    'side': element.Type,
+                    'price': element.Rate,
+                    'cost': element.Total,
+                    'amount': element.Amount,
+                    'filled': element.Amount,
+                    'remaining': 0,
+                    'fee': undefined,
+                };
+            }
+        }
+        throw new OrderNotCached ('Order ' +id+ ' not found in Cryptopia');
     }
 
     async fetchOpenOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
@@ -653,9 +690,8 @@ module.exports = class cryptopia extends Exchange {
 
     async withdraw (currency, amount, address, tag = undefined, params = {}) {
         this.checkAddress (address);
-        let currencyId = this.currencyId (currency);
         let request = {
-            'Currency': currencyId,
+            'Currency': currency,
             'Amount': amount,
             'Address': address, // Address must exist in you AddressBook in security settings
         };

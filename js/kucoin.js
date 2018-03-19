@@ -483,29 +483,39 @@ module.exports = class kucoin extends Exchange {
         return result;
     }
 
-    async fetchOrder (id, symbol = undefined, params = {}) {
+    async fetchOrder(id, symbol = undefined, params = {}) {
         if (typeof symbol === 'undefined')
-            throw new ExchangeError (this.id + ' fetchOrder requires a symbol argument');
-        let orderType = this.safeValue (params, 'type');
-        if (typeof orderType === 'undefined')
-            throw new ExchangeError (this.id + ' fetchOrder requires a type parameter ("BUY" or "SELL")');
-        await this.loadMarkets ();
-        let market = this.market (symbol);
+            throw new ExchangeError(this.id + ' fetchOrder requires a symbol argument');
+        let orderType = 'SELL'
+        await this.loadMarkets();
+        let response;
         let request = {
-            'symbol': market['id'],
+            'symbol': symbol,
             'type': orderType,
             'orderOid': id,
         };
-        let response = await this.privateGetOrderDetail (this.extend (request, params));
-        if (!response['data'])
-            throw new OrderNotFound (this.id + ' ' + this.json (response));
-        let order = this.parseOrder (response['data'], market);
+
+        response = await this.privateGetOrderDetail(this.extend(request, params));
+        if (!response['data']) {
+            request = {
+                'symbol': symbol,
+                'type': 'BUY',
+                'orderOid': id,
+            };
+            response = await this.privateGetOrderDetail(this.extend(request, params));
+        }
+        if (!response['data']) {
+            throw new OrderNotFound(this.id + ' ' + this.json(response));
+        }
+
+        let order = this.parseOrder(response['data']);
         let orderId = order['id'];
         if (orderId in this.orders)
             order['status'] = this.orders[orderId]['status'];
         this.orders[orderId] = order;
         return order;
     }
+    
 
     async fetchOpenOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
         if (!symbol)
@@ -559,17 +569,15 @@ module.exports = class kucoin extends Exchange {
         return this.filterBySymbolSinceLimit (closedOrders, symbol, since, limit);
     }
 
-    async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
+    async createOrder (symbol, type, side, amount, price, params = {}) {
         if (type !== 'limit')
             throw new ExchangeError (this.id + ' allows limit orders only');
         await this.loadMarkets ();
-        let market = this.market (symbol);
-        let base = market['base'];
         let request = {
-            'symbol': market['id'],
+            'symbol': symbol,
             'type': side.toUpperCase (),
-            'price': this.priceToPrecision (symbol, price),
-            'amount': this.truncate (amount, this.currencies[base]['precision']),
+            'price': price,
+            'amount': amount,
         };
         price = parseFloat (price);
         amount = parseFloat (amount);
@@ -853,17 +861,37 @@ module.exports = class kucoin extends Exchange {
     async withdraw (code, amount, address, tag = undefined, params = {}) {
         this.checkAddress (address);
         await this.loadMarkets ();
-        let currency = this.currency (code);
+        let currency = code
         this.checkAddress (address);
         let response = await this.privatePostAccountCoinWithdrawApply (this.extend ({
-            'coin': currency['id'],
+            'coin': currency,
             'amount': amount,
             'address': address,
         }, params));
-        return {
-            'info': response,
-            'id': undefined,
-        };
+        
+        if(response.success){
+            if(response.data){
+                const clickLink = response.data.content
+                const regex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+                const matches_array = clickLink.match(regex)
+                let verifyURL = undefined
+                for (let index = 0; index < matches_array.length; index++) {
+                    const element = matches_array[index];
+                    if(element.includes("confirm-withdraw")){
+                        verifyURL = element
+                    }                
+                }
+                response.data.content = undefined
+                return {
+                    'info': response,
+                    'id': response.data.oid,
+                    'verifyURL':verifyURL
+                };
+            }
+        }
+        
+        throw new ExchangeError ({msg:"Something went wrong with the withdraw request", 
+            info: response});
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {

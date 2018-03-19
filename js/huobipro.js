@@ -469,12 +469,15 @@ module.exports = class huobipro extends Exchange {
         if (market)
             symbol = market['symbol'];
         let timestamp = order['created-at'];
-        let amount = parseFloat (order['amount']);
+        let amount = undefined;
         let filled = parseFloat (order['field-amount']);
-        let remaining = amount - filled;
-        let price = parseFloat (order['price']);
+        let remaining = undefined;
+        if (status === 'closed'){
+            remaining = 0        
+        }
+        let price = undefined;
         let cost = parseFloat (order['field-cash-amount']);
-        let average = 0;
+        let average = undefined;
         if (filled)
             average = parseFloat (cost / filled);
         let result = {
@@ -498,17 +501,17 @@ module.exports = class huobipro extends Exchange {
     }
 
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
+        const symbTrans = (symbol.replace("_","")).toLowerCase()
         await this.loadMarkets ();
         await this.loadAccounts ();
-        let market = this.market (symbol);
         let order = {
             'account-id': this.accounts[0]['id'],
-            'amount': this.amountToPrecision (symbol, amount),
-            'symbol': market['id'],
+            'amount': amount,
+            'symbol': symbTrans,
             'type': side + '-' + type,
         };
         if (type === 'limit')
-            order['price'] = this.priceToPrecision (symbol, price);
+            order['price'] = price;
         let response = await this.privatePostOrderOrdersPlace (this.extend (order, params));
         return {
             'info': response,

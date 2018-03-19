@@ -215,7 +215,7 @@ module.exports = class bitflyer extends Exchange {
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
         await this.loadMarkets ();
         let order = {
-            'product_code': this.marketId (symbol),
+            'product_code':symbol,
             'child_order_type': type.toUpperCase (),
             'side': side.toUpperCase (),
             'price': price,
@@ -233,7 +233,7 @@ module.exports = class bitflyer extends Exchange {
             throw new ExchangeError (this.id + ' cancelOrder() requires a symbol argument');
         await this.loadMarkets ();
         return await this.privatePostCancelchildorder (this.extend ({
-            'product_code': this.marketId (symbol),
+            'product_code': symbol,
             'child_order_acceptance_id': id,
         }, params));
     }
@@ -302,13 +302,12 @@ module.exports = class bitflyer extends Exchange {
         if (typeof symbol === 'undefined')
             throw new ExchangeError (this.id + ' fetchOrders() requires a symbol argument');
         await this.loadMarkets ();
-        let market = this.market (symbol);
         let request = {
-            'product_code': market['id'],
+            'product_code': symbol,
             'count': limit,
         };
         let response = await this.privateGetGetchildorders (this.extend (request, params));
-        let orders = this.parseOrders (response, market, since, limit);
+        let orders = this.parseOrders (response, undefined, since, limit);
         if (symbol)
             orders = this.filterBy (orders, 'symbol', symbol);
         return orders;

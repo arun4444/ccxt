@@ -465,7 +465,7 @@ module.exports = class gdax extends Exchange {
         await this.loadMarkets ();
         // let oid = this.nonce ().toString ();
         let order = {
-            'product_id': this.marketId (market),
+            'product_id': market,
             'side': side,
             'size': amount,
             'type': type,
