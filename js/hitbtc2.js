@@ -865,9 +865,7 @@ module.exports = class hitbtc2 extends hitbtc {
         return this.parseTrades(response, market, since, limit);
     }
 
-    async createOrder(symbol, type, side, amount, price = undefined, params = {}) {
-        await this.loadMarkets();
-        // their max accepted length is 32 characters
+    async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
         let uuid = this.uuid();
         let parts = uuid.split('-');
         let clientOrderId = parts.join('');
@@ -886,9 +884,7 @@ module.exports = class hitbtc2 extends hitbtc {
             request['timeInForce'] = 'FOK';
         }
         let response = await this.privatePostOrder(this.extend(request, params));
-        let order = this.parseOrder(response);
-        let id = order['id'];
-        this.orders[id] = order;
+        let order = this.parseOrderNew(response);
         return order;
     }
 
@@ -913,23 +909,32 @@ module.exports = class hitbtc2 extends hitbtc {
         return order;
     }
 
-    async cancelOrder(id, symbol = undefined, params = {}) {
-        await this.loadMarkets();
-        return await this.privateDeleteOrderClientOrderId(this.extend({
+    async cancelOrder (id, symbol = undefined, params = {}) {
+        let result = await this.privateDeleteOrderClientOrderId(this.extend({
             'clientOrderId': id,
         }, params));
+        if('status' in result && result.status === "canceled"){
+            return {success: true}
+        } else {
+            throw new ExchangeError (id + ' cancelling order failed: ' + result);
+        }
     }
 
-    parseOrder(order, market = undefined) {
-        let created = undefined;
-        if ('createdAt' in order)
-            created = this.parse8601(order['createdAt']);
-        let updated = undefined;
-        if ('updatedAt' in order)
-            updated = this.parse8601(order['updatedAt']);
-        if (!market)
-            market = this.markets_by_id[order['symbol']];
-        let symbol = market['symbol'];
+    parseOrderNew (order) {   
+        if('clientOrderId' in order)  {
+            let id = order['clientOrderId']
+            let result = {
+                'orderId': id,
+                'info': order,
+                'success': true,
+            };
+            return result;
+        } else {
+            return { success: false, error: response }
+        }
+    }
+
+    parseOrder (order) {        
         let amount = this.safeFloat(order, 'quantity');
         let filled = this.safeFloat(order, 'cumQuantity');
         let status = order['status'];
@@ -941,40 +946,19 @@ module.exports = class hitbtc2 extends hitbtc {
             status = 'open';
         } else if (status === 'filled') {
             status = 'closed';
+        } else if (status === 'canceled') {
+            status = 'canceled';
+        } else if (status === 'expired') {
+            status = 'canceled';
         }
-        let id = order['clientOrderId'].toString();
-        let price = this.safeFloat(order, 'price');
-        if (typeof price === 'undefined') {
-            if (id in this.orders)
-                price = this.orders[id]['price'];
-        }
-        let remaining = undefined;
-        let cost = undefined;
-        if (typeof amount !== 'undefined') {
-            if (typeof filled !== 'undefined') {
-                remaining = amount - filled;
-                if (typeof price !== 'undefined') {
-                    cost = filled * price;
-                }
-            }
-        }
+        let id = order['clientOrderId']        
         return {
-            'id': id,
-            'timestamp': created,
-            'datetime': this.iso8601(created),
-            'created': created,
-            'updated': updated,
+            'orderId': id,
             'status': status,
-            'symbol': symbol,
-            'type': order['type'],
-            'side': order['side'],
-            'price': price,
-            'amount': amount,
-            'cost': cost,
-            'filled': filled,
-            'remaining': remaining,
-            'fee': undefined,
+            'amtFilled': filled,
+            'amtOriginal': amount,
             'info': order,
+            'success': true,
         };
     }
 
@@ -983,9 +967,12 @@ module.exports = class hitbtc2 extends hitbtc {
         let response = await this.privateGetHistoryOrder(this.extend({
             'clientOrderId': id,
         }, params));
-        let numOrders = response.length;
-        if (numOrders > 0)
+
+        if (Array.isArray(response) && response.length > 0
+            && 'clientOrderId' in response[0] && response[0].clientOrderId === id) {
             return this.parseOrder(response[0]);
+        }
+            
         throw new OrderNotFound(this.id + ' order ' + id + ' not found');
     }
 
@@ -1112,10 +1099,15 @@ module.exports = class hitbtc2 extends hitbtc {
         if (tag)
             request['paymentId'] = tag;
         let response = await this.privatePostAccountCryptoWithdraw(this.extend(request, params));
-        return {
-            'info': response,
-            'id': response['id'],
-        };
+        if('id' in response){
+            return {
+                'success': true,
+                'info': response,
+                'id': response['id'],
+            };
+        } else {
+            return { success: false, error: response }
+        }
     }
 
     sign(path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {

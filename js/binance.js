@@ -621,15 +621,6 @@ module.exports = class binance extends Exchange {
         return (status in statuses) ? statuses[status] : status.toLowerCase ();
     }
 
-    parseNewOrder (order) {
-        let orderId = order["orderId"]
-        let result = {
-            'orderId': orderId,
-            'info': order,
-        };
-        return result;
-    }
-
     parseOrder (order) {
         let status = this.safeValue (order, 'status');
         if (typeof status !== 'undefined'){
@@ -638,31 +629,44 @@ module.exports = class binance extends Exchange {
             throw new ExchangeError (this.id + ' malformed order: ' + this.json (order));
         }                
         let filled = this.safeFloat (order, 'executedQty', 0.0);
+        let orig = order["origQty"]
         let orderId = order["orderId"]
+        
         let result = {
+            'success': true,
             'orderId': orderId,
             'status': status,
             'amtFilled': filled,
+            'amtOriginal': orig,
             'info': order,
         };
         return result;
     }
 
-    async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
+    async createOrder(symbol, type, side, amount, price = undefined, params = {}) {
         let order = {
             'symbol': symbol,
             'quantity': amount,
-            'type': type.toUpperCase (),
-            'side': side.toUpperCase (),
+            'type': type.toUpperCase(),
+            'side': side.toUpperCase(),
         };
         if (type === 'limit') {
-            order = this.extend (order, {
+            order = this.extend(order, {
                 'price': price,
                 'timeInForce': 'GTC', // 'GTC' = Good To Cancel (default), 'IOC' = Immediate Or Cancel
             });
         }
-        let response = await this.privatePostOrder (this.extend (order, params));
-        return this.parseNewOrder (response);
+        const response = await this.privatePostOrder(this.extend(order, params));
+        if (("orderId" in response)) {
+            let orderId = response["orderId"]
+            let result = {
+                'success': true,
+                'orderId': orderId,
+                'info': order,
+            };
+            return result
+        }
+        return { success: false, error: response }
     }
 
     async fetchOrder (id, symbol = undefined, params = {}) {
@@ -719,7 +723,7 @@ module.exports = class binance extends Exchange {
             'symbol': symbol,
             'orderId': id,
         }, params));
-        if(response.orderId === id){
+        if(("orderId" in response)){
             return {success: true}
         } else {
             throw new ExchangeError (id + ' cancelling order failed: ' + response);
@@ -810,10 +814,14 @@ module.exports = class binance extends Exchange {
         if (tag)
             request['addressTag'] = tag;
         let response = await this.wapiPostWithdraw (this.extend (request, params));
+        if(!("success" in response) || !response['success']){
+            throw new Error ("Withdraw was unsuccessful " + ' ' + JSON.stringify(response));
+        }
         return {
+            'success': true,
             'info': response,
             'id': this.safeString (response, 'id'),
-        };
+        }
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
