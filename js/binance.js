@@ -669,7 +669,7 @@ module.exports = class binance extends Exchange {
         return { success: false, error: response }
     }
 
-    async fetchOrder (id, symbol = undefined, params = {}) {
+    async fetchOrder (id, symbol = undefined, type, params = {}) {
         if (!symbol)
             throw new ExchangeError (this.id + ' fetchOrder requires a symbol param');
         let request = {
@@ -724,7 +724,7 @@ module.exports = class binance extends Exchange {
             'orderId': id,
         }, params));
         if(("orderId" in response)){
-            return {success: true}
+            return {success: true, info:response}
         } else {
             throw new ExchangeError (id + ' cancelling order failed: ' + response);
         }

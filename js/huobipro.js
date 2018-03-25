@@ -18,7 +18,7 @@ module.exports = class huobipro extends Exchange {
             'version': 'v1',
             'accounts': undefined,
             'accountsById': undefined,
-            'hostname': 'api.huobipro.com',
+            'hostname': 'api.huobi.pro',
             'has': {
                 'getCoinFees': true,
                 'CORS': false,
@@ -43,7 +43,7 @@ module.exports = class huobipro extends Exchange {
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27766569-15aa7b9a-5edd-11e7-9e7f-44791f4ee49c.jpg',
-                'api': 'https://api.huobipro.com',
+                'api': 'https://api.huobi.pro',
                 'www': 'https://www.huobipro.com',
                 'doc': 'https://github.com/huobiapi/API_Docs/wiki/REST_api_reference',
                 'fees': 'https://www.huobipro.com/about/fee/',
@@ -426,12 +426,15 @@ module.exports = class huobipro extends Exchange {
         }, params));
     }
 
-    async fetchOrder (id, symbol = undefined, params = {}) {
-        await this.loadMarkets ();
+    async fetchOrder (id, symbol = undefined, type, params = {}) {
         let response = await this.privateGetOrderOrdersId (this.extend ({
             'id': id,
         }, params));
-        return this.parseOrder (response['data']);
+        if ('data' in response){
+            return this.parseOrder (response['data']);
+        } else {
+            return { success: false, error: response }
+        }
     }
 
     parseOrderStatus (status) {
@@ -447,62 +450,40 @@ module.exports = class huobipro extends Exchange {
         return status;
     }
 
-    parseOrder (order, market = undefined) {
-        let side = undefined;
-        let type = undefined;
-        let status = undefined;
-        if ('type' in order) {
-            let orderType = order['type'].split ('-');
-            side = orderType[0];
-            type = orderType[1];
-            status = this.parseOrderStatus (order['state']);
+    parseOrder(order) {
+
+        //         account-id:2300984
+        // amount:"0.400000000000000000"
+        // canceled-at:0
+        // created-at:1521809925222
+        // field-amount:"0.0"
+        // field-cash-amount:"0.0"
+        // field-fees:"0.0"
+        // finished-at:0
+        // id:2641002827
+        // price:"0.003163000000000000"
+        // source:"spot-api"
+        // state:"submitted"
+        // symbol:"etcbtc"
+        // type:"sell-limit"
+
+        if ('id' in order){
+            let result = {
+                'success': true,
+                'orderId': order['id'],
+                'status': this.parseOrderStatus(order['state']),
+                'amtFilled': Number(order['field-amount']),
+                'amtOriginal': Number(order['amount']),
+                'info': order,
+            };
+            return result;
+        } else {
+            return { success: false, error: order }
         }
-        let symbol = undefined;
-        if (!market) {
-            if ('symbol' in order) {
-                if (order['symbol'] in this.markets_by_id) {
-                    let marketId = order['symbol'];
-                    market = this.markets_by_id[marketId];
-                }
-            }
-        }
-        if (market)
-            symbol = market['symbol'];
-        let timestamp = order['created-at'];
-        let amount = undefined;
-        let filled = parseFloat (order['field-amount']);
-        let remaining = undefined;
-        if (status === 'closed'){
-            remaining = 0        
-        }
-        let price = undefined;
-        let cost = parseFloat (order['field-cash-amount']);
-        let average = undefined;
-        if (filled)
-            average = parseFloat (cost / filled);
-        let result = {
-            'info': order,
-            'id': order['id'].toString (),
-            'timestamp': timestamp,
-            'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
-            'type': type,
-            'side': side,
-            'price': price,
-            'average': average,
-            'cost': cost,
-            'amount': amount,
-            'filled': filled,
-            'remaining': remaining,
-            'status': status,
-            'fee': undefined,
-        };
-        return result;
     }
 
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
         const symbTrans = (symbol.replace("_","")).toLowerCase()
-        await this.loadMarkets ();
         await this.loadAccounts ();
         let order = {
             'account-id': this.accounts[0]['id'],
@@ -512,15 +493,24 @@ module.exports = class huobipro extends Exchange {
         };
         if (type === 'limit')
             order['price'] = price;
-        let response = await this.privatePostOrderOrdersPlace (this.extend (order, params));
-        return {
-            'info': response,
-            'id': response['data'],
-        };
+        const response = await this.privatePostOrderOrdersPlace (this.extend (order, params));
+        if ('data' in response){
+            return {
+                'info': response,
+                'id': response['data'],
+                'success': true,
+            };
+        } else {
+            return { success: false, error: response }
+        }
     }
 
-    async cancelOrder (id, symbol = undefined, params = {}) {
-        return await this.privatePostOrderOrdersIdSubmitcancel ({ 'id': id });
+    async cancelOrder (id, symbol = undefined, side, params = {}) {
+        let result = await this.privatePostOrderOrdersIdSubmitcancel ({ 'id': id });
+        if ('data' in result && result.status === "ok"){
+            return {'success': true, info: result}
+        }
+        return {'success': false, error: result}
     }
 
     async fetchDepositAddress (code, params = {}) {
@@ -584,13 +574,17 @@ module.exports = class huobipro extends Exchange {
         if (tag)
             request['addr-tag'] = tag; // only for XRP?
         let response = await this.privatePostDwWithdrawApiCreate (this.extend (request, params));
-        let id = undefined;
         if ('data' in response) {
-            id = response['data'];
+            const id = response['data'];
+            return {
+                'info': response,
+                'id': id,
+                'success': true
+            };
         }
         return {
-            'info': response,
-            'id': id,
+            'error': response,
+            'success': false
         };
     }
 
