@@ -494,7 +494,7 @@ module.exports = class cryptopia extends Exchange {
 
     }
 
-    async cancelOrder (id, symbol = undefined, params = {}) {
+    async cancelOrder (id, symbol = undefined, side, params = {}) {
         let response = await this.privatePostCancelTrade (this.extend ({
                 'Type': 'Trade',
                 'OrderId': id,
@@ -584,7 +584,7 @@ module.exports = class cryptopia extends Exchange {
         return this.filterBySinceLimit (result, since, limit);
     }
 
-    async fetchOrder (id, symbol, params = {}) {
+    async fetchOrder (id, symbol, side, params = {}) {
         const symbMod = symbol.replace("_","/")
         const response = await this.privatePostGetOpenOrders ({
             'Market': symbMod

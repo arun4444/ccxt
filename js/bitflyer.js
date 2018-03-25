@@ -228,7 +228,7 @@ module.exports = class bitflyer extends Exchange {
         };
     }
 
-    async cancelOrder (id, symbol = undefined, params = {}) {
+    async cancelOrder (id, symbol = undefined, side, params = {}) {
         if (typeof symbol === 'undefined')
             throw new ExchangeError (this.id + ' cancelOrder() requires a symbol argument');
         await this.loadMarkets ();
@@ -323,7 +323,7 @@ module.exports = class bitflyer extends Exchange {
         return this.fetchOrders (symbol, since, limit, params);
     }
 
-    async fetchOrder (id, symbol = undefined, params = {}) {
+    async fetchOrder (id, symbol = undefined, side, params = {}) {
         if (typeof symbol === 'undefined')
             throw new ExchangeError (this.id + ' fetchOrder() requires a symbol argument');
         let orders = await this.fetchOrders (symbol);

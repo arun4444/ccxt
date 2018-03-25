@@ -237,7 +237,7 @@ module.exports = class gemini extends Exchange {
         };
     }
 
-    async fetchOrder (order_id, symbol, params = {}) {
+    async fetchOrder (order_id, symbol, side, params = {}) {
         let nonce = this.nonce ();
         let ord = {
             'order_id':order_id,
@@ -266,7 +266,7 @@ module.exports = class gemini extends Exchange {
         }
     }
 
-    async cancelOrder (id, symbol = undefined, params = {}) {
+    async cancelOrder (id, symbol = undefined, side, params = {}) {
         await this.loadMarkets ();
         return await this.privatePostOrderCancel ({ 'order_id': id });
     }

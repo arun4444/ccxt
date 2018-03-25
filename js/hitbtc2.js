@@ -909,7 +909,7 @@ module.exports = class hitbtc2 extends hitbtc {
         return order;
     }
 
-    async cancelOrder (id, symbol = undefined, params = {}) {
+    async cancelOrder (id, symbol = undefined, side, params = {}) {
         let result = await this.privateDeleteOrderClientOrderId(this.extend({
             'clientOrderId': id,
         }, params));
@@ -962,7 +962,7 @@ module.exports = class hitbtc2 extends hitbtc {
         };
     }
 
-    async fetchOrder(id, symbol = undefined, params = {}) {
+    async fetchOrder(id, symbol = undefined, side, params = {}) {
         await this.loadMarkets();
         let response = await this.privateGetHistoryOrder(this.extend({
             'clientOrderId': id,

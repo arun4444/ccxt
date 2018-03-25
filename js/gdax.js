@@ -413,7 +413,7 @@ module.exports = class gdax extends Exchange {
         };
     }
 
-    async fetchOrder (id, symbol = undefined, params = {}) {
+    async fetchOrder (id, symbol = undefined, side, params = {}) {
         await this.loadMarkets ();
         let response = await this.privateGetOrdersId (this.extend ({
             'id': id,
@@ -479,7 +479,7 @@ module.exports = class gdax extends Exchange {
         };
     }
 
-    async cancelOrder (id, symbol = undefined, params = {}) {
+    async cancelOrder (id, symbol = undefined, side, params = {}) {
         await this.loadMarkets ();
         return await this.privateDeleteOrdersId ({ 'id': id });
     }

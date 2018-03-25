@@ -499,7 +499,7 @@ module.exports = class bittrex extends Exchange {
         return 'uuid';
     }
 
-    async cancelOrder(id, symbol = undefined, params = {}) {
+    async cancelOrder(id, symbol = undefined, side, params = {}) {
         let orderIdField = this.getOrderIdField();
         let request = {};
         request[orderIdField] = id;
@@ -545,7 +545,7 @@ module.exports = class bittrex extends Exchange {
         return result;
     }
 
-    async fetchOrder(id, symbol = undefined, params = {}) {
+    async fetchOrder(id, symbol = undefined, side, params = {}) {
         let response = undefined;
         try {
             let orderIdField = this.getOrderIdField();

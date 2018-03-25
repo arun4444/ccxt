@@ -669,7 +669,7 @@ module.exports = class binance extends Exchange {
         return { success: false, error: response }
     }
 
-    async fetchOrder (id, symbol = undefined, type, params = {}) {
+    async fetchOrder (id, symbol = undefined, type, side, params = {}) {
         if (!symbol)
             throw new ExchangeError (this.id + ' fetchOrder requires a symbol param');
         let request = {
@@ -716,7 +716,7 @@ module.exports = class binance extends Exchange {
         return this.filterBy (orders, 'status', 'closed');
     }
 
-    async cancelOrder (id, symbol = undefined, params = {}) {
+    async cancelOrder (id, symbol = undefined, side, params = {}) {
         if (!symbol)
             throw new ExchangeError (this.id + ' cancelOrder requires a symbol argument');
         let response = await this.privateDeleteOrder (this.extend ({
