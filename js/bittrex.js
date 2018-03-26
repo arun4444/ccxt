@@ -474,7 +474,8 @@ module.exports = class bittrex extends Exchange {
         return this.filterBySymbol(orders, symbol);
     }
 
-    async createOrder(symbol, type, side, amount, price = undefined, params = {}) {
+    async createOrder(symbol, type, side, amount, price = undefined,
+        nativeBase, nativeQuote, params = {}) {
         if (type !== 'limit')
             throw new ExchangeError(this.id + ' allows limit orders only');
         let method = 'marketGet' + this.capitalize(side) + type;
@@ -488,8 +489,8 @@ module.exports = class bittrex extends Exchange {
         if ("result" in response && orderIdField in response.result) {
             return {
                 'success': true,
+                'orderId': response['result'][orderIdField],
                 'info': response,
-                'id': response['result'][orderIdField],
             }
         }
         return { success: false, error: response }
@@ -505,7 +506,7 @@ module.exports = class bittrex extends Exchange {
         request[orderIdField] = id;
         let response = await this.marketGetCancel(this.extend(request, params));
         if ("success" in response && response.success) {
-            return { success: true }
+            return { success: true, info: response }
         } else {
             throw new ExchangeError(id + ' cancelling order failed: ' + response);
         }

@@ -706,6 +706,34 @@ module.exports = class hitbtc2 extends hitbtc {
         return this.parseBalance(result);
     }
 
+    async fetchAccountBalance() {
+        const method = 'privateGet' + 'Account' + 'Balance';
+        const balances = await this[method]();
+        const result = { 'info': balances };
+        const resultant = new Map()
+        for (let b = 0; b < balances.length; b++) {
+            const balance = balances[b];
+            const code = balance['currency'];
+            const balanceAmount = parseFloat(balance['available'])
+            resultant.set(code, balanceAmount)
+        }
+        return resultant;
+    }
+
+    async fetchTradeBalance() {
+        let method = 'privateGet' + 'Trading' + 'Balance';
+        let balances = await this[method]();
+        let result = { 'info': balances };
+        const resultant = new Map()
+        for (let b = 0; b < balances.length; b++) {
+            let balance = balances[b];
+            let code = balance['currency'];
+            let balanceAmount = parseFloat(balance['available'])
+            resultant.set(code, balanceAmount)
+        }
+        return resultant;
+    }
+
     parseOHLCV(ohlcv, market = undefined, timeframe = '1d', since = undefined, limit = undefined) {
         let timestamp = this.parse8601(ohlcv['timestamp']);
         return [
@@ -747,16 +775,16 @@ module.exports = class hitbtc2 extends hitbtc {
         let symbol = undefined;
         if (market)
             symbol = market['symbol'];
-        let baseVolume = this.safeFloat (ticker, 'volume');
-        let quoteVolume = this.safeFloat (ticker, 'volumeQuote');
-        let open = this.safeFloat (ticker, 'open');
-        let last = this.safeFloat (ticker, 'last');
+        let baseVolume = this.safeFloat(ticker, 'volume');
+        let quoteVolume = this.safeFloat(ticker, 'volumeQuote');
+        let open = this.safeFloat(ticker, 'open');
+        let last = this.safeFloat(ticker, 'last');
         let change = undefined;
         let percentage = undefined;
         let average = undefined;
         if (typeof last !== 'undefined' && typeof open !== 'undefined') {
             change = last - open;
-            average = this.sum (last, open) / 2;
+            average = this.sum(last, open) / 2;
             if (open > 0)
                 percentage = change / open * 100;
         }
@@ -768,11 +796,11 @@ module.exports = class hitbtc2 extends hitbtc {
         return {
             'symbol': symbol,
             'timestamp': timestamp,
-            'datetime': this.iso8601 (timestamp),
-            'high': this.safeFloat (ticker, 'high'),
-            'low': this.safeFloat (ticker, 'low'),
-            'bid': this.safeFloat (ticker, 'bid'),
-            'ask': this.safeFloat (ticker, 'ask'),
+            'datetime': this.iso8601(timestamp),
+            'high': this.safeFloat(ticker, 'high'),
+            'low': this.safeFloat(ticker, 'low'),
+            'bid': this.safeFloat(ticker, 'bid'),
+            'ask': this.safeFloat(ticker, 'ask'),
             'vwap': vwap,
             'open': open,
             'close': last,
@@ -865,7 +893,48 @@ module.exports = class hitbtc2 extends hitbtc {
         return this.parseTrades(response, market, since, limit);
     }
 
-    async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
+    async createOrder(symbol, type, side, amount, price = undefined,
+        nativeBase, nativeQuote, params = {}) {
+        if (side === 'buy') {
+            let balanceMap = await this.fetchAccountBalance()
+            let requestBalance = balanceMap.get(nativeQuote)
+            if (!isNaN(requestBalance)) {
+                if (requestBalance > 0) {
+                    let request = {
+                        'currency': nativeQuote,
+                        'amount': requestBalance,
+                        'type': "bankToExchange",
+                    };
+                    try {
+                        await this.privatePostAccountTransfer(this.extend(request, params));
+                    } catch (e) {
+                    }
+                }
+            } else {
+                throw new ExchangeError("Could not find a balance for " +
+                    nativeQuote + " in HitBtc for " + symbol);
+            }
+        } else {
+            let balanceMap = await this.fetchAccountBalance()
+            let requestBalance = balanceMap.get(nativeBase)
+            if (!isNaN(requestBalance)) {
+                if (requestBalance > 0) {
+                    let request = {
+                        'currency': nativeBase,
+                        'amount': requestBalance,
+                        'type': "bankToExchange",
+                    };
+                    try {
+                        await this.privatePostAccountTransfer(this.extend(request, params));
+                    } catch (e) {
+                    }
+                }
+            } else {
+                throw new ExchangeError("Could not find a balance for " +
+                    nativeBase + " in HitBtc for " + symbol);
+            }
+        }
+
         let uuid = this.uuid();
         let parts = uuid.split('-');
         let clientOrderId = parts.join('');
@@ -909,19 +978,19 @@ module.exports = class hitbtc2 extends hitbtc {
         return order;
     }
 
-    async cancelOrder (id, symbol = undefined, side, params = {}) {
+    async cancelOrder(id, symbol = undefined, side, params = {}) {
         let result = await this.privateDeleteOrderClientOrderId(this.extend({
             'clientOrderId': id,
         }, params));
-        if('status' in result && result.status === "canceled"){
-            return {success: true}
+        if ('status' in result && result.status === "canceled") {
+            return { success: true, info: result }
         } else {
-            throw new ExchangeError (id + ' cancelling order failed: ' + result);
+            throw new ExchangeError(id + ' cancelling order failed: ' + result);
         }
     }
 
-    parseOrderNew (order) {   
-        if('clientOrderId' in order)  {
+    parseOrderNew(order) {
+        if ('clientOrderId' in order) {
             let id = order['clientOrderId']
             let result = {
                 'orderId': id,
@@ -934,7 +1003,7 @@ module.exports = class hitbtc2 extends hitbtc {
         }
     }
 
-    parseOrder (order) {        
+    parseOrder(order) {
         let amount = this.safeFloat(order, 'quantity');
         let filled = this.safeFloat(order, 'cumQuantity');
         let status = order['status'];
@@ -951,7 +1020,7 @@ module.exports = class hitbtc2 extends hitbtc {
         } else if (status === 'expired') {
             status = 'canceled';
         }
-        let id = order['clientOrderId']        
+        let id = order['clientOrderId']
         return {
             'orderId': id,
             'status': status,
@@ -963,16 +1032,13 @@ module.exports = class hitbtc2 extends hitbtc {
     }
 
     async fetchOrder(id, symbol = undefined, side, params = {}) {
-        await this.loadMarkets();
         let response = await this.privateGetHistoryOrder(this.extend({
             'clientOrderId': id,
         }, params));
-
         if (Array.isArray(response) && response.length > 0
             && 'clientOrderId' in response[0] && response[0].clientOrderId === id) {
             return this.parseOrder(response[0]);
         }
-            
         throw new OrderNotFound(this.id + ' order ' + id + ' not found');
     }
 
@@ -1007,11 +1073,11 @@ module.exports = class hitbtc2 extends hitbtc {
         if (typeof limit !== 'undefined')
             request['limit'] = limit;
         if (typeof since !== 'undefined')
-            request['from'] = this.iso8601 (since);
-        let response = await this.privateGetHistoryOrder (this.extend (request, params));
-        let orders = this.parseOrders (response, market);
-        orders = this.filterBy (orders, 'status', 'closed');
-        return this.filterBySinceLimit (orders, since, limit);
+            request['from'] = this.iso8601(since);
+        let response = await this.privateGetHistoryOrder(this.extend(request, params));
+        let orders = this.parseOrders(response, market);
+        orders = this.filterBy(orders, 'status', 'closed');
+        return this.filterBySinceLimit(orders, since, limit);
     }
 
     async fetchMyTrades(symbol = undefined, since = undefined, limit = undefined, params = {}) {
@@ -1062,8 +1128,8 @@ module.exports = class hitbtc2 extends hitbtc {
             'currency': currency['id'],
         });
         let address = response['address'];
-        this.checkAddress (address);
-        let tag = this.safeString (response, 'paymentId');
+        this.checkAddress(address);
+        let tag = this.safeString(response, 'paymentId');
         return {
             'currency': currency,
             'address': address,
@@ -1078,8 +1144,8 @@ module.exports = class hitbtc2 extends hitbtc {
             'currency': code,
         });
         let address = response['address'];
-        this.checkAddress (address);
-        let tag = this.safeString (response, 'paymentId');
+        this.checkAddress(address);
+        let tag = this.safeString(response, 'paymentId');
         return {
             'currency': code,
             'address': address,
@@ -1089,8 +1155,28 @@ module.exports = class hitbtc2 extends hitbtc {
         };
     }
 
-    async withdraw (code, amount, address, tag = undefined, params = {}) {
-        this.checkAddress (address);
+    async withdraw(code, amount, address, tag = undefined, params = {}) {
+        let balanceMap = await this.fetchTradeBalance()
+        let tradeBalance = balanceMap.get(code)
+
+        if (!isNaN(tradeBalance)) {
+            if ((tradeBalance > 0)) {
+                let request = {
+                    'currency': code,
+                    'amount': tradeBalance,
+                    'type': "exchangeToBank",
+                };
+                try {
+                    await this.privatePostAccountTransfer(this.extend(request, params));
+                } catch (e) {
+                }
+            }
+        } else {
+            throw new ExchangeError("Could not find a balance for " +
+                code + " in HitBtc for " + amount);
+        }
+
+        this.checkAddress(address);
         let request = {
             'currency': code,
             'amount': parseFloat(amount),
@@ -1099,7 +1185,7 @@ module.exports = class hitbtc2 extends hitbtc {
         if (tag)
             request['paymentId'] = tag;
         let response = await this.privatePostAccountCryptoWithdraw(this.extend(request, params));
-        if('id' in response){
+        if ('id' in response) {
             return {
                 'success': true,
                 'info': response,

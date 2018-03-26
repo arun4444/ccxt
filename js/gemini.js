@@ -217,7 +217,8 @@ module.exports = class gemini extends Exchange {
         return this.parseBalance (result);
     }
 
-    async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
+    async createOrder (symbol, type, side, amount, price = undefined,
+        nativeBase, nativeQuote, params = {}) {
         await this.loadMarkets ();
         if (type === 'market')
             throw new ExchangeError (this.id + ' allows limit orders only');

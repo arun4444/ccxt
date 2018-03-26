@@ -448,7 +448,8 @@ module.exports = class cryptopia extends Exchange {
         return this.parseBalance (result);
     }
 
-    async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
+    async createOrder (symbol, type, side, amount, price = undefined, 
+        nativeBase, nativeQuote, params = {}) {
         if (type === 'market')
             throw new ExchangeError (this.id + ' allows limit orders only');
         const symbMod = symbol.replace("_","/")
@@ -484,14 +485,13 @@ module.exports = class cryptopia extends Exchange {
         }
         if (typeof id !== 'undefined'){
             return {
-                'id': id,
+                'success': true,
+                'orderId': id,
                 'info': response,
-                'success':true,
             }
         } else {
             return { success: false, error: response }
         }
-
     }
 
     async cancelOrder (id, symbol = undefined, side, params = {}) {
@@ -501,7 +501,7 @@ module.exports = class cryptopia extends Exchange {
         }, params));
 
         if('Success' in response && response.Success){
-            return {success: true}
+            return {success: true, info: response}
         } else {
             throw new ExchangeError (id + ' cancelling order failed: ' + response);
         }
@@ -602,7 +602,7 @@ module.exports = class cryptopia extends Exchange {
                     'amtOriginal': element.Amount,
                     'info': response,
                     'success': true,
-                }
+                }                
                 return result
             }
         }

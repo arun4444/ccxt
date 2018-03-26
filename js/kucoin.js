@@ -445,7 +445,8 @@ module.exports = class kucoin extends Exchange {
         return this.filterBySymbolSinceLimit (closedOrders, symbol, since, limit);
     }
 
-    async createOrder (symbol, type, side, amount, price, params = {}) {
+    async createOrder (symbol, type, side, amount, price,
+        nativeBase, nativeQuote, params = {}) {
         if (type !== 'limit')
             throw new ExchangeError (this.id + ' allows limit orders only');
         let request = {

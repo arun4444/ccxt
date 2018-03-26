@@ -643,7 +643,8 @@ module.exports = class binance extends Exchange {
         return result;
     }
 
-    async createOrder(symbol, type, side, amount, price = undefined, params = {}) {
+    async createOrder(symbol, type, side, amount, price = undefined,
+        nativeBase, nativeQuote,params = {}) {
         let order = {
             'symbol': symbol,
             'quantity': amount,
@@ -669,7 +670,7 @@ module.exports = class binance extends Exchange {
         return { success: false, error: response }
     }
 
-    async fetchOrder (id, symbol = undefined, type, side, params = {}) {
+    async fetchOrder (id, symbol = undefined, side, params = {}) {
         if (!symbol)
             throw new ExchangeError (this.id + ' fetchOrder requires a symbol param');
         let request = {

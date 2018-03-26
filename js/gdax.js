@@ -461,7 +461,8 @@ module.exports = class gdax extends Exchange {
         return this.parseOrders (response, market, since, limit);
     }
 
-    async createOrder (market, type, side, amount, price = undefined, params = {}) {
+    async createOrder (market, type, side, amount, price = undefined,
+        nativeBase, nativeQuote, params = {}) {
         await this.loadMarkets ();
         // let oid = this.nonce ().toString ();
         let order = {

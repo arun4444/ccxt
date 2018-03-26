@@ -482,7 +482,8 @@ module.exports = class huobipro extends Exchange {
         }
     }
 
-    async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
+    async createOrder (symbol, type, side, amount, price = undefined,
+        nativeBase, nativeQuote, params = {}) {
         const symbTrans = (symbol.replace("_","")).toLowerCase()
         await this.loadAccounts ();
         let order = {
