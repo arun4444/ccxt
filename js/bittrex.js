@@ -172,12 +172,13 @@ module.exports = class bittrex extends Exchange {
             const withdrawalFee = Number(result['TxFee']);
             const minimumWithdraw = 3.00001 * withdrawalFee;
             const withdrawEnabled = result['IsActive'];
+            let depositEnabled = withdrawEnabled
             return {
                 'symbol': code,
                 'minimumWithdraw': Number(minimumWithdraw),
                 'withdrawEnabled': withdrawEnabled,
                 'withdrawalFee': Number(withdrawalFee),
-                'depositEnabled': null,
+                'depositEnabled': depositEnabled,
                 'depositFee': Number(0),
             };
         } else {
