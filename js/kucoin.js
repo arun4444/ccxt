@@ -707,7 +707,6 @@ module.exports = class kucoin extends Exchange {
     async withdraw (code, amount, address, tag = undefined, params = {}) {
         this.checkAddress (address);
         let currency = code
-        this.checkAddress (address);
         let response = await this.privatePostAccountCoinWithdrawApply (this.extend ({
             'coin': currency,
             'amount': amount,

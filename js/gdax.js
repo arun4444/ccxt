@@ -368,53 +368,28 @@ module.exports = class gdax extends Exchange {
         return this.safeString (statuses, status, status);
     }
 
-    parseOrder (order, market = undefined) {
-        let timestamp = this.parse8601 (order['created_at']);
-        let symbol = undefined;
-        if (!market) {
-            if (order['product_id'] in this.markets_by_id)
-                market = this.markets_by_id[order['product_id']];
+    parseOrder (order) {
+        if('id' in order){
+            let status = this.parseOrderStatus (order['status']);
+            let amount = this.safeFloat (order, 'size');
+            if (typeof amount === 'undefined')
+                amount = this.safeFloat (order, 'funds');
+            if (typeof amount === 'undefined')
+                amount = this.safeFloat (order, 'specified_funds');
+            let filled = this.safeFloat (order, 'filled_size');
+            return {
+                    'success': true,
+                    'orderId': order['id'],
+                    'status': status,
+                    'amtFilled': filled,
+                    'amtOriginal': amount,
+                    'info': order,
+            }
         }
-        let status = this.parseOrderStatus (order['status']);
-        let price = this.safeFloat (order, 'price');
-        let amount = this.safeFloat (order, 'size');
-        if (typeof amount === 'undefined')
-            amount = this.safeFloat (order, 'funds');
-        if (typeof amount === 'undefined')
-            amount = this.safeFloat (order, 'specified_funds');
-        let filled = this.safeFloat (order, 'filled_size');
-        let remaining = undefined;
-        if (typeof amount !== 'undefined')
-            if (typeof filled !== 'undefined')
-                remaining = amount - filled;
-        let cost = this.safeFloat (order, 'executed_value');
-        let fee = {
-            'cost': this.safeFloat (order, 'fill_fees'),
-            'currency': undefined,
-            'rate': undefined,
-        };
-        if (market)
-            symbol = market['symbol'];
-        return {
-            'id': order['id'],
-            'info': order,
-            'timestamp': timestamp,
-            'datetime': this.iso8601 (timestamp),
-            'status': status,
-            'symbol': symbol,
-            'type': order['type'],
-            'side': order['side'],
-            'price': price,
-            'cost': cost,
-            'amount': amount,
-            'filled': filled,
-            'remaining': remaining,
-            'fee': fee,
-        };
+        return {success: false, error: order}
     }
 
     async fetchOrder (id, symbol = undefined, side, params = {}) {
-        await this.loadMarkets ();
         let response = await this.privateGetOrdersId (this.extend ({
             'id': id,
         }, params));
@@ -463,8 +438,6 @@ module.exports = class gdax extends Exchange {
 
     async createOrder (market, type, side, amount, price = undefined,
         nativeBase, nativeQuote, params = {}) {
-        await this.loadMarkets ();
-        // let oid = this.nonce ().toString ();
         let order = {
             'product_id': market,
             'side': side,
@@ -474,15 +447,23 @@ module.exports = class gdax extends Exchange {
         if (type === 'limit')
             order['price'] = price;
         let response = await this.privatePostOrders (this.extend (order, params));
-        return {
-            'info': response,
-            'id': response['id'],
-        };
+        if('id' in response){
+            return {
+                'success': true,
+                'orderId': response['id'],
+                'info': response,
+            }
+        } else {
+            return {success: false, error:response}
+        }
     }
 
     async cancelOrder (id, symbol = undefined, side, params = {}) {
-        await this.loadMarkets ();
-        return await this.privateDeleteOrdersId ({ 'id': id });
+        const returner = await this.privateDeleteOrdersId ({ 'id': id });
+        if(Array.isArray(returner) && returner.length > 0 && returner[0] === id){
+            return {success: true, info:returner}
+        }
+        return {success: false, error: returner}
     }
 
     async getPaymentMethods () {
@@ -520,7 +501,6 @@ module.exports = class gdax extends Exchange {
 
     async withdraw (currency, amount, address, tag = undefined, params = {}) {
         this.checkAddress (address);
-        await this.loadMarkets ();
         let request = {
             'currency': currency,
             'amount': amount,
@@ -535,9 +515,10 @@ module.exports = class gdax extends Exchange {
             request['crypto_address'] = address;
         }
         let response = await this[method] (this.extend (request, params));
-        if (!response)
+        if (!response || !('id' in response))
             throw new ExchangeError (this.id + ' withdraw() error: ' + this.json (response));
         return {
+            'success': true,
             'info': response,
             'id': response['id'],
         };

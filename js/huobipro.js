@@ -497,9 +497,9 @@ module.exports = class huobipro extends Exchange {
         const response = await this.privatePostOrderOrdersPlace (this.extend (order, params));
         if ('data' in response){
             return {
-                'info': response,
-                'id': response['data'],
                 'success': true,
+                'orderId': response['data'],
+                'info': response,
             };
         } else {
             return { success: false, error: response }

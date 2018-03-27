@@ -2,14 +2,14 @@
 
 //  ---------------------------------------------------------------------------
 
-const Exchange = require ('./base/Exchange');
-const { ExchangeError } = require ('./base/errors');
+const Exchange = require('./base/Exchange');
+const { ExchangeError } = require('./base/errors');
 
 //  ---------------------------------------------------------------------------
 
 module.exports = class gemini extends Exchange {
-    describe () {
-        return this.deepExtend (super.describe (), {
+    describe() {
+        return this.deepExtend(super.describe(), {
             'id': 'gemini',
             'name': 'Gemini',
             'countries': 'US',
@@ -77,17 +77,17 @@ module.exports = class gemini extends Exchange {
         });
     }
 
-    async fetchMarkets () {
-        let markets = await this.publicGetSymbols ();
+    async fetchMarkets() {
+        let markets = await this.publicGetSymbols();
         let result = [];
         for (let p = 0; p < markets.length; p++) {
             let id = markets[p];
             let market = id;
-            let uppercase = market.toUpperCase ();
-            let base = uppercase.slice (0, 3);
-            let quote = uppercase.slice (3, 6);
+            let uppercase = market.toUpperCase();
+            let base = uppercase.slice(0, 3);
+            let quote = uppercase.slice(3, 6);
             let symbol = base + '/' + quote;
-            result.push ({
+            result.push({
                 'id': id,
                 'symbol': symbol,
                 'base': base,
@@ -98,18 +98,18 @@ module.exports = class gemini extends Exchange {
         return result;
     }
 
-    async fetchOrderBook (symbol, limit = undefined, params = {}) {
-        await this.loadMarkets ();
-        let orderbook = await this.publicGetBookSymbol (this.extend ({
-            'symbol': this.marketId (symbol),
+    async fetchOrderBook(symbol, limit = undefined, params = {}) {
+        await this.loadMarkets();
+        let orderbook = await this.publicGetBookSymbol(this.extend({
+            'symbol': this.marketId(symbol),
         }, params));
-        return this.parseOrderBook (orderbook, undefined, 'bids', 'asks', 'price', 'amount');
+        return this.parseOrderBook(orderbook, undefined, 'bids', 'asks', 'price', 'amount');
     }
 
-    async fetchTicker (symbol, params = {}) {
-        await this.loadMarkets ();
-        let market = this.market (symbol);
-        let ticker = await this.publicGetPubtickerSymbol (this.extend ({
+    async fetchTicker(symbol, params = {}) {
+        await this.loadMarkets();
+        let market = this.market(symbol);
+        let ticker = await this.publicGetPubtickerSymbol(this.extend({
             'symbol': market['id'],
         }, params));
         let timestamp = ticker['volume']['timestamp'];
@@ -118,51 +118,51 @@ module.exports = class gemini extends Exchange {
         return {
             'symbol': symbol,
             'timestamp': timestamp,
-            'datetime': this.iso8601 (timestamp),
+            'datetime': this.iso8601(timestamp),
             'high': undefined,
             'low': undefined,
-            'bid': parseFloat (ticker['bid']),
-            'ask': parseFloat (ticker['ask']),
+            'bid': parseFloat(ticker['bid']),
+            'ask': parseFloat(ticker['ask']),
             'vwap': undefined,
             'open': undefined,
             'close': undefined,
             'first': undefined,
-            'last': parseFloat (ticker['last']),
+            'last': parseFloat(ticker['last']),
             'change': undefined,
             'percentage': undefined,
             'average': undefined,
-            'baseVolume': parseFloat (ticker['volume'][baseVolume]),
-            'quoteVolume': parseFloat (ticker['volume'][quoteVolume]),
+            'baseVolume': parseFloat(ticker['volume'][baseVolume]),
+            'quoteVolume': parseFloat(ticker['volume'][quoteVolume]),
             'info': ticker,
         };
     }
 
-    parseTrade (trade, market) {
+    parseTrade(trade, market) {
         let timestamp = trade['timestampms'];
         let order = undefined;
         if ('orderId' in trade)
-            order = trade['orderId'].toString ();
-        let fee = this.safeFloat (trade, 'fee_amount');
+            order = trade['orderId'].toString();
+        let fee = this.safeFloat(trade, 'fee_amount');
         if (typeof fee !== 'undefined') {
-            let currency = this.safeString (trade, 'fee_currency');
+            let currency = this.safeString(trade, 'fee_currency');
             if (typeof currency !== 'undefined') {
                 if (currency in this.currencies_by_id)
                     currency = this.currencies_by_id[currency]['code'];
-                currency = this.commonCurrencyCode (currency);
+                currency = this.commonCurrencyCode(currency);
             }
             fee = {
-                'cost': parseFloat (trade['fee_amount']),
+                'cost': parseFloat(trade['fee_amount']),
                 'currency': currency,
             };
         }
-        let price = parseFloat (trade['price']);
-        let amount = parseFloat (trade['amount']);
+        let price = parseFloat(trade['price']);
+        let amount = parseFloat(trade['amount']);
         return {
-            'id': trade['tid'].toString (),
+            'id': trade['tid'].toString(),
             'order': order,
             'info': trade,
             'timestamp': timestamp,
-            'datetime': this.iso8601 (timestamp),
+            'datetime': this.iso8601(timestamp),
             'symbol': market['symbol'],
             'type': undefined,
             'side': trade['type'],
@@ -173,21 +173,21 @@ module.exports = class gemini extends Exchange {
         };
     }
 
-    async fetchTrades (symbol, since = undefined, limit = undefined, params = {}) {
-        await this.loadMarkets ();
-        let market = this.market (symbol);
-        let response = await this.publicGetTradesSymbol (this.extend ({
+    async fetchTrades(symbol, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets();
+        let market = this.market(symbol);
+        let response = await this.publicGetTradesSymbol(this.extend({
             'symbol': market['id'],
         }, params));
-        return this.parseTrades (response, market, since, limit);
+        return this.parseTrades(response, market, since, limit);
     }
 
-    async fetchDepositAddress (code, params = {}) {
-        let response = await this.privatePostDepositCurrencyNewAddress (this.extend ({
+    async fetchDepositAddress(code, params = {}) {
+        let response = await this.privatePostDepositCurrencyNewAddress(this.extend({
             'currency': code,
         }, params));
-        if(response['address']){
-            let address = this.safeString (response, 'address');
+        if (response['address']) {
+            let address = this.safeString(response, 'address');
             return {
                 'currency': code,
                 'address': address,
@@ -196,130 +196,143 @@ module.exports = class gemini extends Exchange {
                 'tag': null,
             };
         }
-        throw new ExchangeError (this.id + ' fetchDepositAddress failed: ' + this.last_http_response);
+        throw new ExchangeError(this.id + ' fetchDepositAddress failed: ' + this.last_http_response);
     }
 
-    async fetchBalance (nativeToCanonCoin, params = {}) {
-        await this.loadMarkets ();
-        let balances = await this.privatePostBalances ();
+    async fetchBalance(nativeToCanonCoin, params = {}) {
+        await this.loadMarkets();
+        let balances = await this.privatePostBalances();
         let result = { 'info': balances };
         for (let b = 0; b < balances.length; b++) {
             let balance = balances[b];
             let currency = balance['currency'];
             let account = {
-                'free': parseFloat (balance['available']),
+                'free': parseFloat(balance['available']),
                 'used': 0.0,
-                'total': parseFloat (balance['amount']),
+                'total': parseFloat(balance['amount']),
             };
             account['used'] = account['total'] - account['free'];
             result[currency] = account;
         }
-        return this.parseBalance (result);
+        return this.parseBalance(result);
     }
 
-    async createOrder (symbol, type, side, amount, price = undefined,
+    async createOrder(symbol, type, side, amount, price = undefined,
         nativeBase, nativeQuote, params = {}) {
-        await this.loadMarkets ();
         if (type === 'market')
-            throw new ExchangeError (this.id + ' allows limit orders only');
-        let nonce = this.nonce ();
+            throw new ExchangeError(this.id + ' allows limit orders only');
+        let nonce = this.nonce();
         let order = {
-            'client_order_id': nonce.toString (),
+            'client_order_id': nonce.toString(),
             'symbol': symbol,
-            'amount': amount.toString (),
-            'price': price.toString (),
+            'amount': amount.toString(),
+            'price': price.toString(),
             'side': side,
             'type': 'exchange limit', // gemini allows limit orders only
         };
-        let response = await this.privatePostOrderNew (this.extend (order, params));
-        return {
-            'info': response,
-            'id': response['order_id'],
-        };
+        const response = await this.privatePostOrderNew(this.extend(order, params));
+        if ('order_id' in response) {
+            return {
+                'success': true,
+                'orderId': response['order_id'],
+                'info': response,
+            }
+        } else {
+            return { success: false, error: response }
+        }
     }
 
-    async fetchOrder (order_id, symbol, side, params = {}) {
-        let nonce = this.nonce ();
+    async fetchOrder(order_id, symbol, side, params = {}) {
+        let nonce = this.nonce();
         let ord = {
-            'order_id':order_id,
+            'order_id': order_id,
             'nonce': nonce,
         };
-        let order = await this.privatePostOrderStatus (this.extend (ord, params));
+        const order = await this.privatePostOrderStatus(this.extend(ord, params));
         let status = 'open'
-        if(!order['is_live']){
+        if (!order['is_live']) {
             status = 'closed'
         }
-        return {
-            'id': order['order_id'],
-            'info': order,
-            'timestamp': order['timestampms'],
-            'datetime': this.iso8601 (order['timestampms']),
-            'status': status,
-            'symbol': symbol,
-            'type': 'limit',
-            'side': order['side'],
-            'price': order['price'],
-            'cost': order['avg_execution_price'],
-            'amount': order['original_amount'],
-            'filled': order['executed_amount'],
-            'remaining': order['remaining_amount'],
-            'fee': undefined,
+        if(order['is_cancelled']){
+            status = 'cancelled'
+        }
+
+        if('order_id' in order){
+            return {
+                'success': true,
+                'orderId': order['order_id'],
+                'status': status,
+                'amtFilled': order['executed_amount'],
+                'amtOriginal': order['original_amount'],
+                'info': order,
+            }
+        } else {
+            return {success: false, error: order}
         }
     }
 
-    async cancelOrder (id, symbol = undefined, side, params = {}) {
-        await this.loadMarkets ();
-        return await this.privatePostOrderCancel ({ 'order_id': id });
+    async cancelOrder(id, symbol = undefined, side, params = {}) {
+        const returner = await this.privatePostOrderCancel({ 'order_id': id });
+        if ('is_cancelled' in returner && returner.is_cancelled) {
+            return { success: true, info: returner }
+        }
+        return { success: false, error: returner }
     }
 
-    async fetchMyTrades (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+    async fetchMyTrades(symbol = undefined, since = undefined, limit = undefined, params = {}) {
         if (typeof symbol === 'undefined')
-            throw new ExchangeError (this.id + ' fetchMyTrades requires a symbol argument');
-        await this.loadMarkets ();
-        let market = this.market (symbol);
+            throw new ExchangeError(this.id + ' fetchMyTrades requires a symbol argument');
+        await this.loadMarkets();
+        let market = this.market(symbol);
         let request = {
             'symbol': market['id'],
         };
         if (typeof limit !== 'undefined')
             request['limit'] = limit;
-        let response = await this.privatePostMytrades (this.extend (request, params));
-        return this.parseTrades (response, market, since, limit);
+        let response = await this.privatePostMytrades(this.extend(request, params));
+        return this.parseTrades(response, market, since, limit);
     }
 
-    async withdraw (code, amount, address, tag = undefined, params = {}) {
-        this.checkAddress (address);
-        await this.loadMarkets ();
-        let response = await this.privatePostWithdrawCurrency (this.extend ({
+    async withdraw(code, amount, address, tag = undefined, params = {}) {
+        this.checkAddress(address);
+        let response = await this.privatePostWithdrawCurrency(this.extend({
             'currency': code,
             'amount': amount,
             'address': address,
         }, params));
+        if('txHash' in response){
+            return {
+                'success': true,
+                'info': response,
+                'id': this.safeString(response, 'txHash'),
+            }
+        }
         return {
-            'info': response,
-            'id': this.safeString (response, 'txHash'),
-        };
+            'success': false,
+            'error': response,
+        }
     }
 
-    sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
-        let url = '/' + this.version + '/' + this.implodeParams (path, params);
-        let query = this.omit (params, this.extractParams (path));
+    sign(path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
+        let url = '/' + this.version + '/' + this.implodeParams(path, params);
+        let query = this.omit(params, this.extractParams(path));
         if (api === 'public') {
-            if (Object.keys (query).length)
-                url += '?' + this.urlencode (query);
+            if (Object.keys(query).length)
+                url += '?' + this.urlencode(query);
         } else {
-            this.checkRequiredCredentials ();
-            let nonce = this.nonce ();
-            let request = this.extend ({
+            this.checkRequiredCredentials();
+            let nonce = this.nonce();
+            let request = this.extend({
                 'request': url,
                 'nonce': nonce,
             }, query);
-            let payload = this.json (request);
-            payload = this.stringToBase64 (this.encode (payload));
-            let signature = this.hmac (payload, this.encode (this.secret), 'sha384');
+            let payload = this.json(request);
+            payload = this.stringToBase64(this.encode(payload));
+            let signature = this.hmac(payload, this.encode(this.secret), 'sha384');
             headers = {
                 'Content-Type': 'text/plain',
                 'X-GEMINI-APIKEY': this.apiKey,
-                'X-GEMINI-PAYLOAD': this.decode (payload),
+                'X-GEMINI-PAYLOAD': this.decode(payload),
                 'X-GEMINI-SIGNATURE': signature,
             };
         }
@@ -327,11 +340,11 @@ module.exports = class gemini extends Exchange {
         return { 'url': url, 'method': method, 'body': body, 'headers': headers };
     }
 
-    async request (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
-        let response = await this.fetch2 (path, api, method, params, headers, body);
+    async request(path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
+        let response = await this.fetch2(path, api, method, params, headers, body);
         if ('result' in response)
             if (response['result'] === 'error')
-                throw new ExchangeError (this.id + ' ' + this.json (response));
+                throw new ExchangeError(this.id + ' ' + this.json(response));
         return response;
     }
 };
