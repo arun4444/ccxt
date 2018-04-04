@@ -990,6 +990,50 @@ module.exports = class Exchange {
         return Y + '-' + m + '-' + d
     }
 
+    isObject(val) {
+        if (val === null) { return false; }
+        return ((typeof val === 'function') || (typeof val === 'object'));
+    }
+
+    returnSuccessCreateOrder(orderId, info) {
+        const returner = {
+            'success': true,
+            'orderId': orderId,
+            'info': info,
+        }
+        return returner
+    }
+
+    returnSuccessFetchOrder(orderId, status, filled, orig, order){
+        let result = {
+            'success': true,
+            'orderId': orderId,
+            'status': status,
+            'amtFilled': Number(filled),
+            'amtOriginal': Number(orig),
+            'info': order,
+        };
+        return result;
+    }
+
+    returnSuccessWithdraw(response, id){
+        return {
+            'success': true,
+            'info': response,
+            'id': id,
+        }
+    }
+
+    returnFailureWithdraw(response){
+        return { success: false, error: response }
+    }
+
+    returnFailureCreateOrder(failureException) {
+        const returner = { 'success': false, 
+            'error': failureException }
+        return returner
+    }
+
     ymdhms (timestamp, infix = ' ') {
         let date = new Date (timestamp)
         let Y = date.getUTCFullYear ()

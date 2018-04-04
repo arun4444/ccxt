@@ -456,11 +456,11 @@ module.exports = class cryptopia extends Exchange {
         let request = {
             'Market': symbMod,
             'Type': this.capitalize (side),
-            'Rate': price,
-            'Amount': amount,
+            'Rate': Number(price),
+            'Amount': Number(amount),
         };
         let response = await this.privatePostSubmitTrade (this.extend (request, params));
-        if (!response)
+        if (this.isObject(response) && ("Success" in response) && (!Boolean(response["Success"])))
             throw new ExchangeError (this.id + ' createOrder returned unknown error: ' + this.json (response));
         let id = undefined;
         let filled = 0.0;
@@ -483,14 +483,10 @@ module.exports = class cryptopia extends Exchange {
         } else {
             throw new ExchangeError (' createOrder returned unknown error: ' + this.json (response));
         }
-        if (typeof id !== 'undefined'){
-            return {
-                'success': true,
-                'orderId': id,
-                'info': response,
-            }
+        if (typeof id !== 'undefined' && !isNaN(id)){
+            return this.returnSuccessCreateOrder(id, response)
         } else {
-            return { success: false, error: response }
+            throw new ExchangeError (' createOrder returned unknown error: ' + this.json (response));
         }
     }
 
@@ -500,7 +496,7 @@ module.exports = class cryptopia extends Exchange {
                 'OrderId': id,
         }, params));
 
-        if('Success' in response && response.Success){
+        if(this.isObject(response) && 'Success' in response && response.Success){
             return {success: true, info: response}
         } else {
             throw new ExchangeError (id + ' cancelling order failed: ' + response);
@@ -589,31 +585,18 @@ module.exports = class cryptopia extends Exchange {
         const response = await this.privatePostGetOpenOrders ({
             'Market': symbMod
         }, params)
-        if(!('Success' in response) || !response.Success || !('Data' in response)){
+        if(!this.isObject(response) || !('Success' in response) || !response.Success || !('Data' in response)){
             return { success: false, error: response } 
         }
         for (let i = 0; i < response['Data'].length; i++) {
             const element = response['Data'][i]
             if(element.OrderId === id){
-                let result = {
-                    'orderId': element.OrderId,
-                    'status': 'open',
-                    'amtFilled': element.Amount - element.Remaining,
-                    'amtOriginal': element.Amount,
-                    'info': response,
-                    'success': true,
-                }                
+                const result = this.returnSuccessFetchOrder(element.OrderId, 'open', 
+                element.Amount - element.Remaining, element.Amount, response)            
                 return result
             }
         }
-        return {
-            'orderId': null,
-            'status': null,
-            'amtFilled': null,
-            'amtOriginal': null,
-            'success':null,
-            'info': response,
-        }
+        return { success: false, error: response }
     }
 
     async fetchOpenOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
@@ -663,17 +646,10 @@ module.exports = class cryptopia extends Exchange {
         if (tag)
             request['PaymentId'] = tag;
         let response = await this.privatePostSubmitWithdraw (this.extend (request, params));
-        if('Success' in response && response.Success && 'Data' in response){
-            return {
-                'success': true,
-                'info': response,
-                'id': response['Data'],
-            }
+        if(this.isObject(response) && 'Success' in response && response.Success && 'Data' in response){
+            return this.returnSuccessWithdraw(response, response['Data'])
         } else {
-            return {
-                'success': false,
-                'error': response,
-            }
+            return this.returnFailureWithdraw(response)
         }
     }
 

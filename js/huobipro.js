@@ -430,7 +430,7 @@ module.exports = class huobipro extends Exchange {
         let response = await this.privateGetOrderOrdersId (this.extend ({
             'id': id,
         }, params));
-        if ('data' in response){
+        if (this.isObject(response) && 'data' in response){
             return this.parseOrder (response['data']);
         } else {
             return { success: false, error: response }
@@ -451,64 +451,43 @@ module.exports = class huobipro extends Exchange {
     }
 
     parseOrder(order) {
-
-        //         account-id:2300984
-        // amount:"0.400000000000000000"
-        // canceled-at:0
-        // created-at:1521809925222
-        // field-amount:"0.0"
-        // field-cash-amount:"0.0"
-        // field-fees:"0.0"
-        // finished-at:0
-        // id:2641002827
-        // price:"0.003163000000000000"
-        // source:"spot-api"
-        // state:"submitted"
-        // symbol:"etcbtc"
-        // type:"sell-limit"
-
         if ('id' in order){
-            let result = {
-                'success': true,
-                'orderId': order['id'],
-                'status': this.parseOrderStatus(order['state']),
-                'amtFilled': Number(order['field-amount']),
-                'amtOriginal': Number(order['amount']),
-                'info': order,
-            };
+            let result = this.returnSuccessFetchOrder(order['id'], this.parseOrderStatus(order['state']),
+            Number(order['field-amount']), Number(order['amount']), order)
             return result;
         } else {
             return { success: false, error: order }
         }
     }
 
-    async createOrder (symbol, type, side, amount, price = undefined,
+    async createOrder(symbol, type, side, amount, price = undefined,
         nativeBase, nativeQuote, params = {}) {
-        const symbTrans = (symbol.replace("_","")).toLowerCase()
-        await this.loadAccounts ();
+        const symbTrans = (symbol.replace("_", "")).toLowerCase()
+        const market = this.marketsById[symbTrans]
+        if (!this.isObject(market)) {
+            throw new ExchangeError(symbol + ' could not find a valid market');
+        }
+        await this.loadAccounts();
         let order = {
             'account-id': this.accounts[0]['id'],
-            'amount': amount,
+            'amount': Number(this.amountToPrecision (market.symbol, amount)),
             'symbol': symbTrans,
             'type': side + '-' + type,
         };
         if (type === 'limit')
-            order['price'] = price;
+            order['price'] = Number(this.priceToPrecision (market.symbol, price))
         const response = await this.privatePostOrderOrdersPlace (this.extend (order, params));
-        if ('data' in response){
-            return {
-                'success': true,
-                'orderId': response['data'],
-                'info': response,
-            };
+        if (this.isObject(response) && 'data' in response && response['data'].length > 0 ){
+            let returner = this.returnSuccessCreateOrder(response["data"],response)
+            return returner
         } else {
-            return { success: false, error: response }
+            return this.returnFailureCreateOrder(response)
         }
     }
 
     async cancelOrder (id, symbol = undefined, side, params = {}) {
         let result = await this.privatePostOrderOrdersIdSubmitcancel ({ 'id': id });
-        if ('data' in result && result.status === "ok"){
+        if (this.isObject(result) && 'data' in result && result.status === "ok"){
             return {'success': true, info: result}
         }
         return {'success': false, error: result}
@@ -577,16 +556,9 @@ module.exports = class huobipro extends Exchange {
         let response = await this.privatePostDwWithdrawApiCreate (this.extend (request, params));
         if ('data' in response) {
             const id = response['data'];
-            return {
-                'info': response,
-                'id': id,
-                'success': true
-            };
+            return this.returnSuccessWithdraw(response, id)
         }
-        return {
-            'error': response,
-            'success': false
-        };
+        return this.returnFailureWithdraw(response)
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {

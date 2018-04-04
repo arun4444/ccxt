@@ -940,15 +940,21 @@ module.exports = class hitbtc2 extends hitbtc {
         let clientOrderId = parts.join('');
         clientOrderId = clientOrderId.slice(0, 32);
         amount = parseFloat(amount);
+
+        const market = this.marketsById[symbol]
+        if(!this.isObject(market)){
+            throw new ExchangeError (symbol + ' could not find a valid market');
+        }
+
         let request = {
             'clientOrderId': clientOrderId,
             'symbol': symbol,
             'side': side,
-            'quantity': amount,
+            'quantity': Number(this.amountToPrecision (market.symbol, amount)),
             'type': type,
         };
         if (type === 'limit') {
-            request['price'] = price;
+            request['price'] = Number(this.priceToPrecision (market.symbol, price));
         } else {
             request['timeInForce'] = 'FOK';
         }
@@ -982,7 +988,7 @@ module.exports = class hitbtc2 extends hitbtc {
         let result = await this.privateDeleteOrderClientOrderId(this.extend({
             'clientOrderId': id,
         }, params));
-        if ('status' in result && result.status === "canceled") {
+        if (this.isObject(result) && 'status' in result && result.status === "canceled") {
             return { success: true, info: result }
         } else {
             throw new ExchangeError(id + ' cancelling order failed: ' + result);
@@ -990,16 +996,13 @@ module.exports = class hitbtc2 extends hitbtc {
     }
 
     parseOrderNew(order) {
-        if ('clientOrderId' in order) {
-            let id = order['clientOrderId']
-            let result = {
-                'orderId': id,
-                'info': order,
-                'success': true,
-            };
+        if (this.isObject(order) && 'clientOrderId' in order && 
+            order["clientOrderId"].length > 0) {
+            let id = order['clientOrderId']            
+            let result = this.returnSuccessCreateOrder(id,order)
             return result;
         } else {
-            return { success: false, error: response }
+            return this.returnFailureCreateOrder(order)
         }
     }
 
@@ -1021,21 +1024,14 @@ module.exports = class hitbtc2 extends hitbtc {
             status = 'canceled';
         }
         let id = order['clientOrderId']
-        return {
-            'orderId': id,
-            'status': status,
-            'amtFilled': filled,
-            'amtOriginal': amount,
-            'info': order,
-            'success': true,
-        };
+        return this.returnSuccessFetchOrder(id,status,filled,amount,order)
     }
 
     async fetchOrder(id, symbol = undefined, side, params = {}) {
         let response = await this.privateGetHistoryOrder(this.extend({
             'clientOrderId': id,
         }, params));
-        if (Array.isArray(response) && response.length > 0
+        if (Array.isArray(response) && response.length > 0 && this.isObject(response[0])
             && 'clientOrderId' in response[0] && response[0].clientOrderId === id) {
             return this.parseOrder(response[0]);
         }
@@ -1185,14 +1181,10 @@ module.exports = class hitbtc2 extends hitbtc {
         if (tag)
             request['paymentId'] = tag;
         let response = await this.privatePostAccountCryptoWithdraw(this.extend(request, params));
-        if ('id' in response) {
-            return {
-                'success': true,
-                'info': response,
-                'id': response['id'],
-            };
+        if (this.isObject(response) && 'id' in response) {
+            return this.returnSuccessWithdraw(response, response["id"])
         } else {
-            return { success: false, error: response }
+            return this.returnFailureWithdraw(response)
         }
     }
 

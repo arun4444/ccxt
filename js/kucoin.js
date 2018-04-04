@@ -364,14 +364,8 @@ module.exports = class kucoin extends Exchange {
             if (order['pendingAmount']>0){
                 status = 'open'
             } 
-            let result = {
-                'success': true,
-                'orderId': order['orderOid'],
-                'status': status,
-                'amtFilled': order['dealAmount'],
-                'amtOriginal': order['pendingAmount']+order['dealAmount'],
-                'info': order,
-            };
+            let result = this.returnSuccessFetchOrder(order['orderOid'],
+                status, order['dealAmount'],order['pendingAmount']+order['dealAmount'],order)
             return result;
         } 
         return { success: false, error: order }    
@@ -386,8 +380,8 @@ module.exports = class kucoin extends Exchange {
             'orderOid': id,
         };
         const response = await this.privateGetOrderDetail(this.extend(request, params));
-        if (!('data' in response) || response.data === null) {
-            throw new OrderNotFound(this.id + ' ' + this.json(response));
+        if (!this.isObject(response) || !('data' in response) || response.data === null) {
+            return { success: false, error: response }
         }
         let order = this.parseOrder(response['data']);
         return order;
@@ -445,27 +439,26 @@ module.exports = class kucoin extends Exchange {
         return this.filterBySymbolSinceLimit (closedOrders, symbol, since, limit);
     }
 
-    async createOrder (symbol, type, side, amount, price,
+    async createOrder(symbol, type, side, amount, price,
         nativeBase, nativeQuote, params = {}) {
+        const market = this.marketsById[symbol]
+        if (!this.isObject(market)) {
+            throw new ExchangeError(symbol + ' could not find a valid market');
+        }
         if (type !== 'limit')
-            throw new ExchangeError (this.id + ' allows limit orders only');
+            throw new ExchangeError(this.id + ' allows limit orders only');
         let request = {
             'symbol': symbol,
             'type': side.toUpperCase (),
-            'price': price,
-            'amount': amount,
+            'price': Number(this.priceToPrecision (market.symbol, price)),
+            'amount': Number(this.amountToPrecision (market.symbol, amount)),
         };
         let response = await this.privatePostOrder (this.extend (request, params));
-        if (("data" in response) && ("orderOid" in response['data'])) {
+        if (this.isObject(response) && ("data" in response) && ("orderOid" in response['data'])) {
             let orderId = response["data"]["orderOid"]
-            let result = {
-                'success': true,
-                'orderId': orderId,
-                'info': response,
-            };
-            return result
+            return this.returnSuccessCreateOrder(orderId,response)
         }
-        return { success: false, error: response }
+        return this.returnFailureCreateOrder(response)
     }
 
     async cancelOrders (symbol = undefined, params = {}) {
@@ -503,8 +496,8 @@ module.exports = class kucoin extends Exchange {
         };
 
         let response = await this.privatePostCancelOrder (this.extend (request, params));
-        if("success" in response){
-            return {"success": response["success"], info: response}
+        if(this.isObject(response) && ("success" in response) && response.success){
+            return {"success": true, info: response}
         }
         return {success: false, error: response}        
     }
@@ -726,12 +719,7 @@ module.exports = class kucoin extends Exchange {
                     }                
                 }
                 response.data.content = undefined
-                return {
-                    'success': true,
-                    'info': response,
-                    'id': response.data.oid,
-                    'verifyURL':verifyURL
-                };
+                return this.returnSuccessWithdraw(response,id)
             }
         }
         

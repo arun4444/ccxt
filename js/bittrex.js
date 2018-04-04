@@ -480,21 +480,25 @@ module.exports = class bittrex extends Exchange {
         if (type !== 'limit')
             throw new ExchangeError(this.id + ' allows limit orders only');
         let method = 'marketGet' + this.capitalize(side) + type;
+
+        const market = this.marketsById[symbol]
+        if(!this.isObject(market)){
+            throw new ExchangeError (symbol + ' could not find a valid market');
+        }
+
         let order = {
             'market': symbol,
-            'quantity': amount,
-            'rate': price,
+            'quantity': Number(this.amountToPrecision (market.symbol, amount)),
+            'rate': Number(this.priceToPrecision (market.symbol, price)),
         };
+
         let response = await this[method](this.extend(order, params));
         let orderIdField = this.getOrderIdField();
-        if ("result" in response && orderIdField in response.result) {
-            return {
-                'success': true,
-                'orderId': response['result'][orderIdField],
-                'info': response,
-            }
+        if (this.isObject(response) && "result" in response && orderIdField in response.result
+            && response['result'][orderIdField].length > 0) {
+            return this.returnSuccessCreateOrder(response['result'][orderIdField], response)
         }
-        return { success: false, error: response }
+        return this.returnFailureCreateOrder(response)
     }
 
     getOrderIdField() {
@@ -506,7 +510,7 @@ module.exports = class bittrex extends Exchange {
         let request = {};
         request[orderIdField] = id;
         let response = await this.marketGetCancel(this.extend(request, params));
-        if ("success" in response && response.success) {
+        if (this.isObject(response) && ("success" in response) && response.success) {
             return { success: true, info: response }
         } else {
             throw new ExchangeError(id + ' cancelling order failed: ' + response);
@@ -535,16 +539,7 @@ module.exports = class bittrex extends Exchange {
         if (typeof id === 'undefined')
             id = this.safeString(order, 'OrderId');
 
-        let result = {
-            'success': true,
-            'orderId': id,
-            'status': status,
-            'amtFilled': filled,
-            'amtOriginal': amount,
-            'info': order,
-        };
-
-        return result;
+        return this.returnSuccessFetchOrder(id, status, filled, amount, order)
     }
 
     async fetchOrder(id, symbol = undefined, side, params = {}) {
@@ -561,6 +556,9 @@ module.exports = class bittrex extends Exchange {
                     throw new OrderNotFound(this.id + ' fetchOrder() error: ' + this.last_http_response);
             }
             throw e;
+        }
+        if(!this.isObject(response) || !('result' in response)){
+            throw new OrderNotFound(this.id + ' fetchOrder() error: ' + response);
         }
         return this.parseOrder(response['result']);
     }
@@ -626,7 +624,7 @@ module.exports = class bittrex extends Exchange {
         };
     }
 
-    async withdraw(currency, amount, address, tag = undefined, params = {}) {
+    async withdraw (currency, amount, address, tag = undefined, params = {}) {
         this.checkAddress(address);
         let request = {
             'currency': currency,
@@ -641,15 +639,11 @@ module.exports = class bittrex extends Exchange {
             throw new Error("Withdraw was unsuccessful " + ' ' + JSON.stringify(response));
         }
 
-        if ('result' in response && 'uuid' in response['result']) {
+        if (this.isObject(response) && 'result' in response && 'uuid' in response['result']) {
             const id = response['result']['uuid'];
-            return {
-                'info': response,
-                'id': id,
-                'success': true,
-            }
+            return this.returnSuccessWithdraw(response, id)
         } else {
-            return { success: false, error: response }
+            return this.returnFailureWithdraw(response)
         }
     }
 

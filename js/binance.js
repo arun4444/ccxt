@@ -630,44 +630,34 @@ module.exports = class binance extends Exchange {
         }                
         let filled = this.safeFloat (order, 'executedQty', 0.0);
         let orig = order["origQty"]
-        let orderId = order["orderId"]
-        
-        let result = {
-            'success': true,
-            'orderId': orderId,
-            'status': status,
-            'amtFilled': filled,
-            'amtOriginal': orig,
-            'info': order,
-        };
-        return result;
+        let orderId = order["orderId"]        
+        return this.returnSuccessFetchOrder(orderId, status, filled, orig, order)
     }
 
     async createOrder(symbol, type, side, amount, price = undefined,
-        nativeBase, nativeQuote,params = {}) {
+        nativeBase, nativeQuote, params = {}) {        
+        const market = this.marketsById[symbol]
+        if(!this.isObject(market)){
+            throw new ExchangeError (symbol + ' could not find a valid market');
+        }
         let order = {
             'symbol': symbol,
-            'quantity': amount,
+            'quantity': Number(this.amountToPrecision (market.symbol, amount)),
             'type': type.toUpperCase(),
             'side': side.toUpperCase(),
         };
         if (type === 'limit') {
             order = this.extend(order, {
-                'price': price,
+                'price': Number(this.priceToPrecision (market.symbol, price)),
                 'timeInForce': 'GTC', // 'GTC' = Good To Cancel (default), 'IOC' = Immediate Or Cancel
             });
         }
         const response = await this.privatePostOrder(this.extend(order, params));
-        if (("orderId" in response)) {
-            let orderId = response["orderId"]
-            let result = {
-                'success': true,
-                'orderId': orderId,
-                'info': order,
-            };
-            return result
+        if (this.isObject(response) && ("orderId" in response) && !isNaN(response["orderId"])) {
+            const orderId = response["orderId"]
+            return this.returnSuccessCreateOrder(orderId, response)
         }
-        return { success: false, error: response }
+        return this.returnFailureCreateOrder(response)
     }
 
     async fetchOrder (id, symbol = undefined, side, params = {}) {
@@ -724,8 +714,8 @@ module.exports = class binance extends Exchange {
             'symbol': symbol,
             'orderId': id,
         }, params));
-        if(("orderId" in response)){
-            return {success: true, info:response}
+        if(this.isObject(response) && ("orderId" in response) && !isNaN(response["orderId"])){
+            return {success: true, info: response}
         } else {
             throw new ExchangeError (id + ' cancelling order failed: ' + response);
         }
@@ -815,14 +805,10 @@ module.exports = class binance extends Exchange {
         if (tag)
             request['addressTag'] = tag;
         let response = await this.wapiPostWithdraw (this.extend (request, params));
-        if(!("success" in response) || !response['success']){
+        if(!this.isObject(response) || !("success" in response) || !response['success']){
             throw new Error ("Withdraw was unsuccessful " + ' ' + JSON.stringify(response));
         }
-        return {
-            'success': true,
-            'info': response,
-            'id': this.safeString (response, 'id'),
-        }
+        return this.returnSuccessWithdraw(response, response['id'])
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
