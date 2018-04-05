@@ -356,10 +356,10 @@ module.exports = class bitflyer extends Exchange {
             'amount': amount,
             // 'bank_account_id': 1234,
         }, params));
-        return {
-            'info': response,
-            'id': response['message_id'],
-        };
+        if(this.isObject(response) && 'message_id' in response){
+            return this.returnSuccessWithdraw(response, response['message_id'])
+        }
+        return this.returnFailureWithdraw(response)
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
