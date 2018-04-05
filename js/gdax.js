@@ -369,7 +369,7 @@ module.exports = class gdax extends Exchange {
     }
 
     parseOrder (order) {
-        if('id' in order){
+        if(this.isObject(order) && 'id' in order){
             let status = this.parseOrderStatus (order['status']);
             let amount = this.safeFloat (order, 'size');
             if (typeof amount === 'undefined')
@@ -377,14 +377,7 @@ module.exports = class gdax extends Exchange {
             if (typeof amount === 'undefined')
                 amount = this.safeFloat (order, 'specified_funds');
             let filled = this.safeFloat (order, 'filled_size');
-            return {
-                    'success': true,
-                    'orderId': order['id'],
-                    'status': status,
-                    'amtFilled': filled,
-                    'amtOriginal': amount,
-                    'info': order,
-            }
+            return this.returnSuccessFetchOrder(order['id'],status,filled,amount,order)
         }
         return {success: false, error: order}
     }
@@ -447,14 +440,10 @@ module.exports = class gdax extends Exchange {
         if (type === 'limit')
             order['price'] = price;
         let response = await this.privatePostOrders (this.extend (order, params));
-        if('id' in response){
-            return {
-                'success': true,
-                'orderId': response['id'],
-                'info': response,
-            }
+        if(this.isObject(response) && ('id' in response)){
+            return this.returnSuccessCreateOrder(response['id'], response)
         } else {
-            return {success: false, error:response}
+            return this.returnFailureCreateOrder(response)
         }
     }
 
@@ -515,13 +504,9 @@ module.exports = class gdax extends Exchange {
             request['crypto_address'] = address;
         }
         let response = await this[method] (this.extend (request, params));
-        if (!response || !('id' in response))
+        if (!this.isObject(response) || !('id' in response))
             throw new ExchangeError (this.id + ' withdraw() error: ' + this.json (response));
-        return {
-            'success': true,
-            'info': response,
-            'id': response['id'],
-        };
+        return this.returnSuccessWithdraw(response, response['id'])
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {

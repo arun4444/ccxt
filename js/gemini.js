@@ -221,9 +221,7 @@ module.exports = class gemini extends Exchange {
         nativeBase, nativeQuote, params = {}) {
         if (type === 'market')
             throw new ExchangeError(this.id + ' allows limit orders only');
-        let nonce = this.nonce();
         let order = {
-            'client_order_id': nonce.toString(),
             'symbol': symbol,
             'amount': amount.toString(),
             'price': price.toString(),
@@ -231,41 +229,28 @@ module.exports = class gemini extends Exchange {
             'type': 'exchange limit', // gemini allows limit orders only
         };
         const response = await this.privatePostOrderNew(this.extend(order, params));
-        if ('order_id' in response) {
-            return {
-                'success': true,
-                'orderId': response['order_id'],
-                'info': response,
-            }
+        if (this.isObject(response) && 'order_id' in response) {
+            return this.returnSuccessCreateOrder(response['order_id'], response)
         } else {
             return { success: false, error: response }
         }
     }
 
     async fetchOrder(order_id, symbol, side, params = {}) {
-        let nonce = this.nonce();
         let ord = {
             'order_id': order_id,
-            'nonce': nonce,
         };
         const order = await this.privatePostOrderStatus(this.extend(ord, params));
-        let status = 'open'
-        if (!order['is_live']) {
-            status = 'closed'
-        }
-        if(order['is_cancelled']){
-            status = 'cancelled'
-        }
-
-        if('order_id' in order){
-            return {
-                'success': true,
-                'orderId': order['order_id'],
-                'status': status,
-                'amtFilled': order['executed_amount'],
-                'amtOriginal': order['original_amount'],
-                'info': order,
+        if(this.isObject(order) && 'order_id' in order){
+            let status = 'open'
+            if (!order['is_live']) {
+                status = 'closed'
             }
+            if(order['is_cancelled']){
+                status = 'canceled'
+            }
+            return this.returnSuccessFetchOrder(order['order_id'], status, order['executed_amount'], 
+                order['original_amount'],order)
         } else {
             return {success: false, error: order}
         }
@@ -273,7 +258,7 @@ module.exports = class gemini extends Exchange {
 
     async cancelOrder(id, symbol = undefined, side, params = {}) {
         const returner = await this.privatePostOrderCancel({ 'order_id': id });
-        if ('is_cancelled' in returner && returner.is_cancelled) {
+        if (this.isObject(returner) && 'is_cancelled' in returner && returner.is_cancelled) {
             return { success: true, info: returner }
         }
         return { success: false, error: returner }
@@ -300,17 +285,10 @@ module.exports = class gemini extends Exchange {
             'amount': amount,
             'address': address,
         }, params));
-        if('txHash' in response){
-            return {
-                'success': true,
-                'info': response,
-                'id': this.safeString(response, 'txHash'),
-            }
+        if(this.isObject(response) && 'txHash' in response){
+            this.returnSuccessWithdraw(response, this.safeString(response, 'txHash'))
         }
-        return {
-            'success': false,
-            'error': response,
-        }
+        return this.returnFailureWithdraw(response)
     }
 
     sign(path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {

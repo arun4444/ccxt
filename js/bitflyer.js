@@ -214,7 +214,6 @@ module.exports = class bitflyer extends Exchange {
 
     async createOrder (symbol, type, side, amount, price = undefined,
         nativeBase, nativeQuote,params = {}) {
-        await this.loadMarkets ();
         let order = {
             'product_code':symbol,
             'child_order_type': type.toUpperCase (),
@@ -223,20 +222,23 @@ module.exports = class bitflyer extends Exchange {
             'size': amount,
         };
         let result = await this.privatePostSendchildorder (this.extend (order, params));
-        return {
-            'info': result,
-            'id': result['child_order_acceptance_id'],
-        };
+        if (this.isObject(result) && 'child_order_acceptance_id' in result){
+            return this.returnSuccessCreateOrder(result['child_order_acceptance_id'], result)
+        } else {
+            return this.returnFailureCreateOrder(result)
+        }
     }
 
     async cancelOrder (id, symbol = undefined, side, params = {}) {
         if (typeof symbol === 'undefined')
             throw new ExchangeError (this.id + ' cancelOrder() requires a symbol argument');
-        await this.loadMarkets ();
-        return await this.privatePostCancelchildorder (this.extend ({
+
+        const result = await this.privatePostCancelchildorder (this.extend ({
             'product_code': symbol,
             'child_order_acceptance_id': id,
         }, params));
+
+        return {success:true, info:result}
     }
 
     parseOrderStatus (status) {
@@ -302,7 +304,6 @@ module.exports = class bitflyer extends Exchange {
     async fetchOrders (symbol = undefined, since = undefined, limit = 100, params = {}) {
         if (typeof symbol === 'undefined')
             throw new ExchangeError (this.id + ' fetchOrders() requires a symbol argument');
-        await this.loadMarkets ();
         let request = {
             'product_code': symbol,
             'count': limit,
@@ -324,14 +325,27 @@ module.exports = class bitflyer extends Exchange {
         return this.fetchOrders (symbol, since, limit, params);
     }
 
-    async fetchOrder (id, symbol = undefined, side, params = {}) {
+    async fetchOrder(id, symbol = undefined, side, params = {}) {
         if (typeof symbol === 'undefined')
-            throw new ExchangeError (this.id + ' fetchOrder() requires a symbol argument');
-        let orders = await this.fetchOrders (symbol);
-        let ordersById = this.indexBy (orders, 'id');
-        if (id in ordersById)
-            return ordersById[id];
-        throw new OrderNotFound (this.id + ' No order found with id ' + id);
+            throw new ExchangeError(this.id + ' fetchOrder() requires a symbol argument');
+        let request = {
+            'product_code': symbol,
+            'count': 100,
+        };
+        const response = await this.privateGetGetchildorders(this.extend(request, params));
+        if(Array.isArray(response) && response.length > 0){
+            for (let h = 0; h < response.length; h++) {
+                const element = response[h];
+                if(this.isObject(element) && "child_order_acceptance_id" in element && 
+                    element["child_order_acceptance_id"] === id){
+                        const status = this.parseOrderStatus(element["child_order_state"])
+                        const returner = this.returnSuccessFetchOrder(element["child_order_acceptance_id"],
+                            status, Number(element["executed_size"]), Number(element['size']),element)
+                        return returner
+                    }                
+            }
+        } 
+        return {success: false, error: response}
     }
 
     async withdraw (currency, amount, address, tag = undefined, params = {}) {
