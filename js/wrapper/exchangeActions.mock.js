@@ -5,8 +5,6 @@ const DBSPREADS = require('./db-spreads.js')
 const DBMOCK = require('./db.mock.js')
 const RDB = require('./redisdb.js')
 
-const CCXT = require('../ccxt.js')
-
 const BINANCE = require('../exchanges/binance.js')
 const BITTREX = require('../exchanges/bittrex.js')
 const CRYPTOPIA = require('../exchanges/cryptopia.js')

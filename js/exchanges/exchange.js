@@ -1,7 +1,6 @@
 "use strict"
 
-const crypto = require('crypto')
-const db = require('../../db.js')
+const db = require('../wrapper/db.js')
 const rp = require('request-promise-native')
 const timeout = 15000
 

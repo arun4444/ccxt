@@ -1,7 +1,7 @@
 "use strict"
 
 const EXCHANGE = require('./exchange.js')
-const CCXT = require('../ccxt/ccxt.js')
+const CCXT = require('../../ccxt.js')
 
 class Huobi extends EXCHANGE {
     constructor(key, secret, pass, tradeFees) {
