@@ -226,8 +226,8 @@ module.exports = class kucoin extends Exchange {
             quote = this.commonCurrencyCode (quote);
             let symbol = base + '/' + quote;
             let precision = {
-                'amount': 8,
-                'price': 8,
+                'amount': 6,
+                'price': 6,
             };
             let active = market['trading'];
             result.push ({
@@ -442,6 +442,8 @@ module.exports = class kucoin extends Exchange {
     async createOrder(symbol, type, side, amount, price,
         nativeBase, nativeQuote, params = {}) {
         const market = this.marketsById[symbol]
+        let quote = market['quote']
+        let base = market['base']
         if (!this.isObject(market)) {
             throw new ExchangeError(symbol + ' could not find a valid market');
         }
@@ -450,8 +452,8 @@ module.exports = class kucoin extends Exchange {
         let request = {
             'symbol': symbol,
             'type': side.toUpperCase (),
-            'price': Number(this.priceToPrecision (market.symbol, price)),
-            'amount': Number(this.amountToPrecision (market.symbol, amount)),
+            'price': this.truncate(price, this.currencies[quote]['precision']),
+            'amount': this.truncate(amount, this.currencies[base]['precision'])
         };
         let response = await this.privatePostOrder (this.extend (request, params));
         if (this.isObject(response) && ("data" in response) && ("orderOid" in response['data'])) {
@@ -702,7 +704,7 @@ module.exports = class kucoin extends Exchange {
         let currency = code
         let response = await this.privatePostAccountCoinWithdrawApply (this.extend ({
             'coin': currency,
-            'amount': amount,
+            'amount': this.truncate(amount, this.currencies_by_id[currency]['precision']),
             'address': address,
         }, params));
         
