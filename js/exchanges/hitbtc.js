@@ -12,6 +12,7 @@ class Hitbtc extends EXCHANGE {
         })
         super(cxt, key, secret, pass, tradeFees)        
         this.id = 'hitbtc'
+        this.tradeFees = tradeFees
         return this._initialize()
     }
 }
