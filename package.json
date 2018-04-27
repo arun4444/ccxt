@@ -37,11 +37,14 @@
   },
   "types": "./ccxt.d.ts",
   "dependencies": {
+    "bottleneck": "^2.3.0",
     "cloudscraper": "1.4.1",
     "crypto-js": "3.1.9-1",
+    "csv-writer": "^1.0.0",
     "fetch-ponyfill": "4.1.0",
     "opencollective": "1.0.3",
-    "qs": "6.5.1"
+    "qs": "6.5.1",
+    "request-promise-native": "^1.0.5"
   },
   "devDependencies": {
     "ansicolor": "^1.1.71",
