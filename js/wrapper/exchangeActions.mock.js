@@ -177,8 +177,8 @@ const cancelOrder = async function (exchange, id, pair, side) {
             const balances = (await DBMOCK.fetchmock_balancesExch(exchange))
             if (Array.isArray(balances) && balances.length > 0) {
                 const balance = balances[0].free
-                const canonBaseCoinBalance = Number(balance[canonBaseCoin])
-                const canonQuoteCoinBalance = Number(balance[canonQuoteCoin])
+                const canonBaseCoinBalance = Number(balance[canonBaseCoin]) || 0
+                const canonQuoteCoinBalance = Number(balance[canonQuoteCoin]) || 0
                 if (isNaN(canonQuoteCoinBalance) || isNaN(canonBaseCoinBalance)) {
                     throw new Error('Your Balance ' + canonQuoteCoinBalance + " or " + canonBaseCoinBalance + " is NaN")
                 }
@@ -280,8 +280,8 @@ const createOrder = async function (exchange, pair, type, side, amountInTrade, p
         const balances = (await DBMOCK.fetchmock_balancesExch(exchange))
         if (Array.isArray(balances) && balances.length > 0) {
             const balance = balances[0].free
-            const canonBaseCoinBalance = Number(balance[canonBaseCoin])
-            const canonQuoteCoinBalance = Number(balance[canonQuoteCoin])
+            const canonBaseCoinBalance = Number(balance[canonBaseCoin]) || 0
+            const canonQuoteCoinBalance = Number(balance[canonQuoteCoin]) || 0
             if (isNaN(canonQuoteCoinBalance) || isNaN(canonBaseCoinBalance)) {
                 throw new Error('Your Balance ' + canonQuoteCoinBalance + " or " + canonBaseCoinBalance + " is NaN")
             }
