@@ -18,8 +18,6 @@ const EXCHANGES = new Map()
 const RP = require('request-promise-native')
 const BOTTLENECK = require("bottleneck")
 
-const EXCHANGES = new Map()
-
 const LIMITER = new BOTTLENECK({
     maxConcurrent: 2,
     highWater: 20,
@@ -95,7 +93,7 @@ const fetchOrder = async function (exchange, id, pair, side) {
         isCanceled = await RDB.sismember(exchange + ":canceled_order:" + pair + ":" + side, id)
     } catch (e){
         const returner = { success: false, symbol: pair, exchange: exchange, error: e }
-        PINO.error({ msg: "Failed fetch valid order from REDIS", 
+        PINO.error({ msg: "Failed fetch valid order from REDIS",
             loc: "exchangeActions,FetchOrder", result: returner })
         return returner
     }
