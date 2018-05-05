@@ -17,25 +17,70 @@ exports.setPrices = async function (prices) {
             const element = prices[index]
             const key = "prices" + ":" + element.symbol + ":" + element.exchange
             pipeline.set(key, JSON.stringify(element))
+            pipeline.expire(key, 20)
         }
         await pipeline.exec()
     } else {
         const key = "prices" + ":" + prices.symbol + ":" + prices.exchange
-        state.db.set(key, JSON.stringify(prices))
+        await state.db.set(key, JSON.stringify(prices))
     }
+}
+
+exports.setBooks = async function (key, element) {
+    await state.db.set(key, JSON.stringify(element))
+    await state.db.expire(key, 20)
+}
+
+exports.del = async function (key) {
+    await state.db.del(key)
+}
+
+exports.getOrderBook = async function (exchangeName, ticker) {
+    return JSON.parse(await state.db.get("orderbook:"+exchangeName+":"+ticker))
 }
 
 exports.getAllPrices = async function () {
     const keys = await state.db.keys('prices:*')
     const vals = await state.db.mget(keys)
     const returner = []
-
     for (let index = 0; index < vals.length; index++) {
         const jsonObj = JSON.parse(vals[index])
         jsonObj.time = new Date(jsonObj.time)
         returner.push(jsonObj)     
     }
+    return returner
+}
 
+exports.getPrice = async function (exchange, pair) {
+    const jsonObj = JSON.parse(await state.db.get("prices:"+pair+":"+exchange))
+    if(jsonObj){
+        jsonObj.time = new Date(jsonObj.time)
+        return jsonObj
+    }
+    return undefined
+}
+
+exports.getPrices = async function (exchangePairs) {
+    const returner = []
+    for (let i = 0; i < exchangePairs.length; i++) {
+        const element = exchangePairs[i];
+        const jsonObj = JSON.parse(await state.db.get("prices:"+element))
+        if(jsonObj){
+            jsonObj.time = new Date(jsonObj.time)
+            returner.push(jsonObj)
+        }
+    }
+    return returner
+}
+
+exports.getAllOrderBook = async function () {
+    const keys = await state.db.keys('orderbook:*')
+    const vals = await state.db.mget(keys)
+    const returner = []
+    for (let index = 0; index < vals.length; index++) {
+        const jsonObj = JSON.parse(vals[index])
+        returner.push(jsonObj)     
+    }
     return returner
 }
 
@@ -51,6 +96,7 @@ exports.sismember = async function(setName, member){
     return false
 }
 
-exports.get = function () {
-    return state.db
+exports.smembers = async function(setName){
+    const result = await state.db.smembers(setName)
+    return result
 }
